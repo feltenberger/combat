@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GameCanvas, GameCanvasHandle } from './GameCanvas';
+import { TouchControls } from './TouchControls';
 import { GameEngine } from '../../engine/GameEngine';
 import { Renderer } from '../../renderer/Renderer';
 import { InputManager } from '../../engine/InputManager';
@@ -265,11 +266,14 @@ export function GamePage({ uid }: GamePageProps) {
     return () => window.removeEventListener('keydown', handleEsc);
   }, [leaveGame]);
 
+  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
   return (
     <div className="game-page">
       <GameCanvas ref={canvasRef} />
+      {isTouchDevice && <TouchControls inputManager={inputManagerRef.current} />}
       <button className="back-to-lobby" onClick={leaveGame}>
-        ESC &mdash; Leave Game
+        {isTouchDevice ? 'Leave Game' : 'ESC \u2014 Leave Game'}
       </button>
     </div>
   );

@@ -6,6 +6,14 @@ export class InputManager {
   private fireConsumed: boolean = false;
   private bound: boolean = false;
 
+  // Touch state
+  touchLeft: boolean = false;
+  touchRight: boolean = false;
+  touchUp: boolean = false;
+  touchDown: boolean = false;
+  touchFire: boolean = false;
+  private touchFireConsumed: boolean = false;
+
   bind(): void {
     if (this.bound) return;
     this.bound = true;
@@ -20,6 +28,12 @@ export class InputManager {
     this.keys.clear();
     this.firePressed = false;
     this.fireConsumed = false;
+    this.touchLeft = false;
+    this.touchRight = false;
+    this.touchUp = false;
+    this.touchDown = false;
+    this.touchFire = false;
+    this.touchFireConsumed = false;
   }
 
   private handleKeyDown = (e: KeyboardEvent): void => {
@@ -43,18 +57,33 @@ export class InputManager {
     }
   };
 
+  setTouchFire(pressed: boolean): void {
+    if (pressed && !this.touchFireConsumed) {
+      this.touchFire = true;
+    }
+    if (!pressed) {
+      this.touchFireConsumed = false;
+      this.touchFire = false;
+    }
+  }
+
   getInput(): PlayerInput {
+    const fire = this.firePressed || this.touchFire;
     const input: PlayerInput = {
-      left: this.keys.has('arrowleft') || this.keys.has('a'),
-      right: this.keys.has('arrowright') || this.keys.has('d'),
-      up: this.keys.has('arrowup') || this.keys.has('w'),
-      down: this.keys.has('arrowdown') || this.keys.has('s'),
-      fire: this.firePressed,
+      left: this.keys.has('arrowleft') || this.keys.has('a') || this.touchLeft,
+      right: this.keys.has('arrowright') || this.keys.has('d') || this.touchRight,
+      up: this.keys.has('arrowup') || this.keys.has('w') || this.touchUp,
+      down: this.keys.has('arrowdown') || this.keys.has('s') || this.touchDown,
+      fire,
       timestamp: Date.now(),
     };
     if (this.firePressed) {
       this.firePressed = false;
       this.fireConsumed = true;
+    }
+    if (this.touchFire) {
+      this.touchFire = false;
+      this.touchFireConsumed = true;
     }
     return input;
   }
