@@ -1,0 +1,40 @@
+{
+  "rules": {
+    "presence": {
+      ".read": true,
+      "$uid": {
+        ".write": "$uid === auth.uid"
+      }
+    },
+    "challenges": {
+      "$uid": {
+        ".read": true,
+        ".write": "auth != null"
+      }
+    },
+    "games": {
+      "$gameId": {
+        ".read": "auth != null",
+        "config": {
+          ".write": "auth != null && !data.exists()"
+        },
+        "status": {
+          ".write": "auth != null"
+        },
+        "state": {
+          ".write": "auth != null"
+        },
+        "input": {
+          "$uid": {
+            ".write": "$uid === auth.uid"
+          }
+        },
+        "presence": {
+          "$uid": {
+            ".write": "$uid === auth.uid"
+          }
+        }
+      }
+    }
+  }
+}
