@@ -4,6 +4,13 @@ import userEvent from '@testing-library/user-event';
 import { IncomingChallenge } from './IncomingChallenge';
 import { ChallengeData } from '../../types/firebase';
 
+vi.mock('../../engine/Arena', () => ({
+  ARENAS: [
+    { name: 'Open Field' },
+    { name: 'The Maze' },
+  ],
+}));
+
 function makeChallenge(overrides: Partial<ChallengeData> = {}): ChallengeData {
   return {
     from: 'uid-host',
@@ -68,6 +75,46 @@ describe('IncomingChallenge', () => {
 
     await user.click(screen.getByText('Accept'));
     expect(onAccept).toHaveBeenCalledWith('blue');
+  });
+
+  it('shows arena name and rounds to win', () => {
+    render(
+      <IncomingChallenge
+        challenge={makeChallenge({ arenaIndex: 1, roundsToWin: 3 })}
+        myColor="blue"
+        onAccept={() => {}}
+        onReject={() => {}}
+      />
+    );
+
+    expect(screen.getByText('The Maze')).toBeInTheDocument();
+    expect(screen.getByText('First to 3')).toBeInTheDocument();
+  });
+
+  it('defaults rounds to win to 2 when not specified', () => {
+    render(
+      <IncomingChallenge
+        challenge={makeChallenge()}
+        myColor="blue"
+        onAccept={() => {}}
+        onReject={() => {}}
+      />
+    );
+
+    expect(screen.getByText('First to 2')).toBeInTheDocument();
+  });
+
+  it('shows fire rate label', () => {
+    render(
+      <IncomingChallenge
+        challenge={makeChallenge({ fireRate: 0 })}
+        myColor="blue"
+        onAccept={() => {}}
+        onReject={() => {}}
+      />
+    );
+
+    expect(screen.getByText('Rapid fire')).toBeInTheDocument();
   });
 
   it('calls onAccept with resolved color when clash', async () => {

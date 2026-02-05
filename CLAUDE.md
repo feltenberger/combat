@@ -70,7 +70,9 @@ React 19 + TypeScript with Vite. Canvas 2D API for all rendering (960x640, progr
 
 Color flows through: localStorage → `PresenceData.color` (RTDB) → `ChallengeData.fromColor` → `GameRoom.config.hostColor`/`guestColor` → `Renderer` → `TankRenderer`/`HUDRenderer`.
 
-When the guest accepts a challenge and both players have the same color, `IncomingChallenge` shows a picker with the clashing color disabled so the guest must pick a different one.
+When the guest accepts a challenge and both players have the same color, `IncomingChallenge` shows a picker with the clashing color disabled so the guest must pick a different one. `IncomingChallenge` also displays the arena, rounds to win, and fire rate preset.
+
+All lobby settings (arena, color, fire rate, rounds to win) persist in localStorage (`combat-arena`, `combat-color`, `combat-fire-rate`, `combat-rounds-to-win`).
 
 ### Networking: Host-Authoritative
 
@@ -99,7 +101,7 @@ The **challenger** is the host and runs the game simulation. Host reads local + 
 WAITING -> COUNTDOWN (3s) -> PLAYING -> ROUND_OVER (2s) -> COUNTDOWN -> ... -> MATCH_OVER
 ```
 
-First to 2 rounds wins. Host writes match result to Firestore on completion.
+Rounds to win is configurable via `ROUNDS_TO_WIN_OPTIONS` (1, 2, 3, 5), default 2. Host writes match result to Firestore on completion.
 
 ### Firebase Data Model
 

@@ -15,7 +15,8 @@ export function buildCpuGameConfig(
   hostColor: TankColor,
   difficulty: BotDifficulty,
   arenaIndex: number,
-  fireRate: number = DEFAULT_FIRE_RATE
+  fireRate: number = DEFAULT_FIRE_RATE,
+  roundsToWin: number = ROUNDS_TO_WIN
 ): { gameId: string; config: GameRoom['config'] } {
   const gameId = `cpu_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const cpuUid = getCpuUid(difficulty);
@@ -30,7 +31,7 @@ export function buildCpuGameConfig(
     gameId,
     config: {
       arenaIndex,
-      roundsToWin: ROUNDS_TO_WIN,
+      roundsToWin,
       hostUid,
       guestUid: cpuUid,
       hostName,

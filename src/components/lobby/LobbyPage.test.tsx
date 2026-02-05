@@ -64,6 +64,12 @@ describe('LobbyPage', () => {
     expect(screen.getByRole('slider')).toBeInTheDocument();
   });
 
+  it('renders Rounds to Win selector when name is set', () => {
+    localStorage.setItem('combat-name', 'TestPlayer');
+    render(<LobbyPage uid="test-uid" />);
+    expect(screen.getByText('Rounds to Win')).toBeInTheDocument();
+  });
+
   it('submitting a new name updates the displayed name', async () => {
     const user = userEvent.setup();
     localStorage.setItem('combat-name', 'OldName');

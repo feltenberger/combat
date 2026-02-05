@@ -17,6 +17,7 @@ export interface ChallengeData {
   arenaIndex: number;
   fromColor?: TankColor;
   fireRate?: number;
+  roundsToWin?: number;
   timestamp: number;
 }
 

@@ -8,12 +8,13 @@ import { ChallengeModal } from './ChallengeModal';
 import { IncomingChallenge } from './IncomingChallenge';
 import { ColorPicker } from './ColorPicker';
 import { FireRateSlider } from './FireRateSlider';
+import { RoundsToWinSelector } from './RoundsToWinSelector';
 import { useFirebasePresence } from '../../hooks/useFirebasePresence';
 import { sendChallenge, listenToChallenge, acceptChallenge, rejectChallenge, clearChallenge } from '../../firebase/lobby';
 import { buildCpuGameConfig } from '../../firebase/cpuGame';
 import { ChallengeData } from '../../types/firebase';
 import { BotDifficulty } from '../../types/game';
-import { TankColor, DEFAULT_FIRE_RATE } from '../../config/constants';
+import { TankColor, DEFAULT_FIRE_RATE, ROUNDS_TO_WIN } from '../../config/constants';
 import { ARENAS } from '../../engine/Arena';
 import { getCpuUid, isCpuUid } from '../../bot/BotFactory';
 import { CPU_DEFAULT_COLORS, CPU_DIFFICULTY_NAMES } from '../../bot/cpuConstants';
@@ -31,8 +32,18 @@ export function LobbyPage({ uid }: LobbyPageProps) {
   const [challengingUid, setChallengingUid] = useState<string | null>(null);
   const [challengingName, setChallengingName] = useState('');
   const [incomingChallenge, setIncomingChallenge] = useState<ChallengeData | null>(null);
-  const [selectedArena, setSelectedArena] = useState(0);
-  const [fireRate, setFireRate] = useState(DEFAULT_FIRE_RATE);
+  const [selectedArena, setSelectedArena] = useState(() => {
+    const saved = localStorage.getItem('combat-arena');
+    return saved !== null ? Number(saved) : 0;
+  });
+  const [fireRate, setFireRate] = useState(() => {
+    const saved = localStorage.getItem('combat-fire-rate');
+    return saved !== null ? Number(saved) : DEFAULT_FIRE_RATE;
+  });
+  const [roundsToWin, setRoundsToWin] = useState(() => {
+    const saved = localStorage.getItem('combat-rounds-to-win');
+    return saved !== null ? Number(saved) : ROUNDS_TO_WIN;
+  });
 
   const navigate = useNavigate();
   const { onlinePlayers } = useFirebasePresence(
@@ -76,6 +87,21 @@ export function LobbyPage({ uid }: LobbyPageProps) {
     localStorage.setItem('combat-color', c);
   };
 
+  const handleArenaChange = (i: number) => {
+    setSelectedArena(i);
+    localStorage.setItem('combat-arena', String(i));
+  };
+
+  const handleFireRateChange = (v: number) => {
+    setFireRate(v);
+    localStorage.setItem('combat-fire-rate', String(v));
+  };
+
+  const handleRoundsToWinChange = (v: number) => {
+    setRoundsToWin(v);
+    localStorage.setItem('combat-rounds-to-win', String(v));
+  };
+
   // CPU player entries for the player list
   const cpuEntries: Player[] = useMemo(() => {
     const difficulties: BotDifficulty[] = ['easy', 'defensive', 'offensive', 'hard'];
@@ -89,9 +115,9 @@ export function LobbyPage({ uid }: LobbyPageProps) {
 
   const handleStartCpuGame = useCallback((difficulty: BotDifficulty) => {
     if (!uid || !name) return;
-    const { gameId, config: cpuConfig } = buildCpuGameConfig(uid, name, color, difficulty, selectedArena, fireRate);
+    const { gameId, config: cpuConfig } = buildCpuGameConfig(uid, name, color, difficulty, selectedArena, fireRate, roundsToWin);
     navigate(`/game/${gameId}`, { state: { cpuConfig } });
-  }, [uid, name, color, selectedArena, fireRate, navigate]);
+  }, [uid, name, color, selectedArena, fireRate, roundsToWin, navigate]);
 
   const handleChallenge = useCallback((targetUid: string, targetName: string) => {
     if (!uid || !name) return;
@@ -105,7 +131,7 @@ export function LobbyPage({ uid }: LobbyPageProps) {
 
     setChallengingUid(targetUid);
     setChallengingName(targetName);
-    sendChallenge(uid, name, targetUid, targetName, selectedArena, color, fireRate);
+    sendChallenge(uid, name, targetUid, targetName, selectedArena, color, fireRate, roundsToWin);
 
     // Listen for response on the target's challenge node
     const unsub = listenToChallenge(targetUid, (challenge) => {
@@ -122,7 +148,7 @@ export function LobbyPage({ uid }: LobbyPageProps) {
         navigate(`/game/${challenge.gameId}`);
       }
     });
-  }, [uid, name, selectedArena, color, fireRate, navigate, handleStartCpuGame]);
+  }, [uid, name, selectedArena, color, fireRate, roundsToWin, navigate, handleStartCpuGame]);
 
   const handleCancelChallenge = () => {
     if (challengingUid) {
@@ -173,7 +199,7 @@ export function LobbyPage({ uid }: LobbyPageProps) {
               <button
                 key={i}
                 className={`arena-btn ${selectedArena === i ? 'selected' : ''}`}
-                onClick={() => setSelectedArena(i)}
+                onClick={() => handleArenaChange(i)}
               >
                 {arena.name}
               </button>
@@ -196,7 +222,12 @@ export function LobbyPage({ uid }: LobbyPageProps) {
 
         <div className="fire-rate-select">
           <h3>Fire Rate</h3>
-          <FireRateSlider value={fireRate} onChange={setFireRate} />
+          <FireRateSlider value={fireRate} onChange={handleFireRateChange} />
+        </div>
+
+        <div className="rounds-select">
+          <h3>Rounds to Win</h3>
+          <RoundsToWinSelector value={roundsToWin} onChange={handleRoundsToWinChange} />
         </div>
       </div>
 

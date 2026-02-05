@@ -85,6 +85,16 @@ describe('buildCpuGameConfig', () => {
     expect(config.fireRate).toBe(0);
   });
 
+  it('defaults roundsToWin to ROUNDS_TO_WIN when not specified', () => {
+    const { config } = buildCpuGameConfig('uid1', 'Alice', 'blue', 'easy', 0);
+    expect(config.roundsToWin).toBe(ROUNDS_TO_WIN);
+  });
+
+  it('stores custom roundsToWin in config', () => {
+    const { config } = buildCpuGameConfig('uid1', 'Alice', 'blue', 'easy', 0, 3, 5);
+    expect(config.roundsToWin).toBe(5);
+  });
+
   it('sets a createdAt timestamp', () => {
     const before = Date.now();
     const { config } = buildCpuGameConfig('uid1', 'Alice', 'blue', 'easy', 0);

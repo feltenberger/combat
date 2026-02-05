@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChallengeData } from '../../types/firebase';
-import { TankColor } from '../../config/constants';
+import { TankColor, ROUNDS_TO_WIN, FIRE_RATE_PRESETS, DEFAULT_FIRE_RATE } from '../../config/constants';
+import { ARENAS } from '../../engine/Arena';
 import { ColorPicker } from './ColorPicker';
 
 interface IncomingChallengeProps {
@@ -21,6 +22,13 @@ export function IncomingChallenge({ challenge, myColor, onAccept, onReject }: In
       <div className="modal">
         <h3>Challenge!</h3>
         <p><strong>{challenge.fromName}</strong> wants to battle!</p>
+        <div className="challenge-details">
+          <span>{ARENAS[challenge.arenaIndex]?.name ?? 'Unknown Arena'}</span>
+          <span className="challenge-detail-sep">&middot;</span>
+          <span>First to {challenge.roundsToWin ?? ROUNDS_TO_WIN}</span>
+          <span className="challenge-detail-sep">&middot;</span>
+          <span>{FIRE_RATE_PRESETS[challenge.fireRate ?? DEFAULT_FIRE_RATE]?.label ?? 'Classic'} fire</span>
+        </div>
         {hasClash && (
           <div className="color-clash">
             <p className="clash-message">

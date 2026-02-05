@@ -32,6 +32,9 @@ export const FIRE_RATE_PRESETS: FireRatePreset[] = [
 
 export const DEFAULT_FIRE_RATE = 3; // Classic
 
+// Rounds to Win
+export const ROUNDS_TO_WIN_OPTIONS = [1, 2, 3, 5];
+
 // Rocks
 export const ROCK_MAX_HP = 3;
 
