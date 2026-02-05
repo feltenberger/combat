@@ -106,11 +106,11 @@ describe('EasyBot', () => {
     for (let i = 0; i < 100; i++) {
       bot.update(makeContext({ dt: 0.05 }));
     }
-    const input = bot.update(ctx);
-    // Should fire since aimed within tolerance
-    // Note: depends on rotation chance, so we run multiple times
+    // The bot may randomly enter WANDER (1-3s) or IDLE (0.5-1.5s) states,
+    // so we need enough iterations to cycle back to ENGAGE and fire.
+    // 500 frames at dt=1/60 = 8.3s — plenty of time to fire at least once.
     let hasFired = false;
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 500; i++) {
       const r = bot.update(ctx);
       if (r.fire) { hasFired = true; break; }
     }
