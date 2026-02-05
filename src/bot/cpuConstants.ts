@@ -18,11 +18,16 @@ export const CPU_DIFFICULTY_NAMES: Record<BotDifficulty, string> = {
 };
 
 // --- Easy Bot ---
-export const EASY_ROTATION_CHANCE = 0.4; // Only rotate toward player 40% of frames
-export const EASY_AIM_TOLERANCE = Math.PI / 6; // ±30°
-export const EASY_REACTION_DELAY_MIN = 0.5; // seconds
+export const EASY_ROTATION_CHANCE = 0.35; // Rotate toward player 35% of frames
+export const EASY_AIM_TOLERANCE = Math.PI / 3; // ±60° — very sloppy aiming
+export const EASY_AIM_ERROR = Math.PI / 4; // ±45° random error added to aim direction
+export const EASY_REACTION_DELAY_MIN = 0.6; // seconds
 export const EASY_REACTION_DELAY_MAX = 1.5;
-export const EASY_MOVE_CHANCE = 0.6; // Move forward 60% of the time
+export const EASY_MOVE_CHANCE = 0.55; // Move forward 55% of the time
+export const EASY_WANDER_CHANCE = 0.15; // 15% chance to wander randomly instead of engaging
+export const EASY_WANDER_DURATION_MIN = 0.8; // seconds
+export const EASY_WANDER_DURATION_MAX = 2.0;
+export const EASY_FIRE_HESITATION = 0.4; // 40% chance to NOT fire even when aimed
 
 // --- Defensive Bot ---
 export const DEFENSIVE_PREFERRED_DISTANCE = 300; // pixels
