@@ -30,9 +30,9 @@ Two Firebase projects exist. **Default is staging. Never deploy to production un
 | production  | combat-retro-game   | https://combat-retro-game.web.app|
 
 ```bash
-npm run build && firebase deploy --only hosting              # staging (default)
-npm run build && firebase deploy --only hosting -P production # production (explicit only)
-firebase deploy --only database,firestore                    # deploy security rules
+npm run build && firebase deploy --only hosting                            # staging (default)
+npm run build -- --mode production && firebase deploy --only hosting -P production  # production (uses .env.production)
+firebase deploy --only database,firestore                                  # deploy security rules
 ```
 
 ## Environment Variables
