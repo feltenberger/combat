@@ -24,6 +24,7 @@ export function GamePage({ uid }: GamePageProps) {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const gamePageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<GameCanvasHandle>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const rendererRef = useRef(new Renderer());
@@ -32,6 +33,7 @@ export function GamePage({ uid }: GamePageProps) {
 
   const [config, setConfig] = useState<GameRoom['config'] | null>(null);
   const [disconnected, setDisconnected] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const isHost = useRef(false);
   const remoteInputRef = useRef<PlayerInput>({
@@ -294,6 +296,22 @@ export function GamePage({ uid }: GamePageProps) {
     navigate('/');
   }, [navigate]);
 
+  // Fullscreen the game-page div, not document.documentElement.
+  // Fullscreening <html> breaks position:fixed touch controls on mobile.
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      gamePageRef.current?.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handleChange);
+    return () => document.removeEventListener('fullscreenchange', handleChange);
+  }, []);
+
   // Handle ESC to return to lobby
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -308,9 +326,14 @@ export function GamePage({ uid }: GamePageProps) {
   const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
   return (
-    <div className="game-page">
+    <div className="game-page" ref={gamePageRef}>
       <GameCanvas ref={canvasRef} />
       {isTouchDevice && <TouchControls inputManager={inputManagerRef.current} />}
+      {isTouchDevice && (
+        <button className="fullscreen-btn" onClick={toggleFullscreen}>
+          {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+        </button>
+      )}
       <button className="back-to-lobby" onClick={leaveGame}>
         {isTouchDevice ? 'Leave Game' : 'ESC \u2014 Leave Game'}
       </button>

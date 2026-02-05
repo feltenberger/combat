@@ -7,10 +7,8 @@ export class InputManager {
   private bound: boolean = false;
 
   // Touch state
-  touchLeft: boolean = false;
-  touchRight: boolean = false;
-  touchUp: boolean = false;
-  touchDown: boolean = false;
+  touchMoveAngle: number | null = null;
+  touchMoving: boolean = false;
   touchFire: boolean = false;
   private touchFireConsumed: boolean = false;
 
@@ -28,10 +26,8 @@ export class InputManager {
     this.keys.clear();
     this.firePressed = false;
     this.fireConsumed = false;
-    this.touchLeft = false;
-    this.touchRight = false;
-    this.touchUp = false;
-    this.touchDown = false;
+    this.touchMoveAngle = null;
+    this.touchMoving = false;
     this.touchFire = false;
     this.touchFireConsumed = false;
   }
@@ -70,13 +66,19 @@ export class InputManager {
   getInput(): PlayerInput {
     const fire = this.firePressed || this.touchFire;
     const input: PlayerInput = {
-      left: this.keys.has('arrowleft') || this.keys.has('a') || this.touchLeft,
-      right: this.keys.has('arrowright') || this.keys.has('d') || this.touchRight,
-      up: this.keys.has('arrowup') || this.keys.has('w') || this.touchUp,
-      down: this.keys.has('arrowdown') || this.keys.has('s') || this.touchDown,
+      left: this.keys.has('arrowleft') || this.keys.has('a'),
+      right: this.keys.has('arrowright') || this.keys.has('d'),
+      up: this.keys.has('arrowup') || this.keys.has('w'),
+      down: this.keys.has('arrowdown') || this.keys.has('s'),
       fire,
       timestamp: Date.now(),
     };
+
+    // Touch joystick overrides directional keys with angle-based movement
+    if (this.touchMoving && this.touchMoveAngle !== null) {
+      input.targetAngle = this.touchMoveAngle;
+    }
+
     if (this.firePressed) {
       this.firePressed = false;
       this.fireConsumed = true;

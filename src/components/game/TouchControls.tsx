@@ -36,21 +36,22 @@ export function TouchControls({ inputManager }: TouchControlsProps) {
       knobRef.current.style.transform = `translate(${dx}px, ${dy}px)`;
     }
 
-    // Map to input with dead zone
-    inputManager.touchLeft = dx < -DEAD_ZONE;
-    inputManager.touchRight = dx > DEAD_ZONE;
-    inputManager.touchUp = dy < -DEAD_ZONE;
-    inputManager.touchDown = dy > DEAD_ZONE;
+    // Map to angle-based input if outside dead zone
+    if (dist > DEAD_ZONE) {
+      inputManager.touchMoveAngle = Math.atan2(dy, dx);
+      inputManager.touchMoving = true;
+    } else {
+      inputManager.touchMoveAngle = null;
+      inputManager.touchMoving = false;
+    }
   }, [inputManager]);
 
   const resetJoystick = useCallback(() => {
     if (knobRef.current) {
       knobRef.current.style.transform = 'translate(0px, 0px)';
     }
-    inputManager.touchLeft = false;
-    inputManager.touchRight = false;
-    inputManager.touchUp = false;
-    inputManager.touchDown = false;
+    inputManager.touchMoveAngle = null;
+    inputManager.touchMoving = false;
     joystickTouchId.current = null;
   }, [inputManager]);
 
