@@ -30,11 +30,14 @@ export interface GameRoom {
     hostColor: TankColor;
     guestColor: TankColor;
     createdAt: number;
+    cpuDifficulty?: BotDifficulty;
   };
   state?: Record<string, unknown>;
   input?: Record<string, Record<string, unknown>>;
   status: 'waiting' | 'active' | 'finished';
 }
+
+import { BotDifficulty } from './game';
 
 export interface MatchRecord {
   gameId: string;
@@ -49,6 +52,7 @@ export interface MatchRecord {
   rounds: number;
   arenaIndex: number;
   completedAt: number;
+  cpuDifficulty?: BotDifficulty;
 }
 
 export interface PlayerStats {

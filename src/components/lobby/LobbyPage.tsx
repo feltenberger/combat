@@ -1,15 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NameEntry } from './NameEntry';
 import { PlayerList } from './PlayerList';
+import { Player } from './PlayerList';
+import { CpuPlayButton } from './CpuPlayButton';
 import { ChallengeModal } from './ChallengeModal';
 import { IncomingChallenge } from './IncomingChallenge';
 import { ColorPicker } from './ColorPicker';
 import { useFirebasePresence } from '../../hooks/useFirebasePresence';
 import { sendChallenge, listenToChallenge, acceptChallenge, rejectChallenge, clearChallenge } from '../../firebase/lobby';
+import { buildCpuGameConfig } from '../../firebase/cpuGame';
 import { ChallengeData } from '../../types/firebase';
+import { BotDifficulty } from '../../types/game';
 import { TankColor } from '../../config/constants';
 import { ARENAS } from '../../engine/Arena';
+import { getCpuUid, isCpuUid } from '../../bot/BotFactory';
+import { CPU_DEFAULT_COLORS, CPU_DIFFICULTY_NAMES } from '../../bot/cpuConstants';
 
 interface LobbyPageProps {
   uid: string | null;
@@ -68,8 +74,33 @@ export function LobbyPage({ uid }: LobbyPageProps) {
     localStorage.setItem('combat-color', c);
   };
 
+  // CPU player entries for the player list
+  const cpuEntries: Player[] = useMemo(() => {
+    const difficulties: BotDifficulty[] = ['easy', 'defensive', 'offensive', 'hard'];
+    return difficulties.map(diff => ({
+      uid: getCpuUid(diff),
+      name: `CPU (${CPU_DIFFICULTY_NAMES[diff]})`,
+      color: CPU_DEFAULT_COLORS[diff],
+      isCpu: true,
+    }));
+  }, []);
+
+  const handleStartCpuGame = useCallback((difficulty: BotDifficulty) => {
+    if (!uid || !name) return;
+    const { gameId, config: cpuConfig } = buildCpuGameConfig(uid, name, color, difficulty, selectedArena);
+    navigate(`/game/${gameId}`, { state: { cpuConfig } });
+  }, [uid, name, color, selectedArena, navigate]);
+
   const handleChallenge = useCallback((targetUid: string, targetName: string) => {
     if (!uid || !name) return;
+
+    // If challenging a CPU, create game directly
+    if (isCpuUid(targetUid)) {
+      const difficulty = targetUid.replace('cpu-bot-', '') as BotDifficulty;
+      handleStartCpuGame(difficulty);
+      return;
+    }
+
     setChallengingUid(targetUid);
     setChallengingName(targetName);
     sendChallenge(uid, name, targetUid, targetName, selectedArena, color);
@@ -89,7 +120,7 @@ export function LobbyPage({ uid }: LobbyPageProps) {
         navigate(`/game/${challenge.gameId}`);
       }
     });
-  }, [uid, name, selectedArena, color, navigate]);
+  }, [uid, name, selectedArena, color, navigate, handleStartCpuGame]);
 
   const handleCancelChallenge = () => {
     if (challengingUid) {
@@ -153,8 +184,10 @@ export function LobbyPage({ uid }: LobbyPageProps) {
           <ColorPicker selected={color} onChange={handleColorChange} />
         </div>
 
+        <CpuPlayButton onStartCpuGame={handleStartCpuGame} />
+
         <PlayerList
-          players={onlinePlayers}
+          players={[...onlinePlayers, ...cpuEntries]}
           onChallenge={handleChallenge}
           challengingUid={challengingUid}
         />

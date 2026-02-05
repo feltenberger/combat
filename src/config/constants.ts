@@ -60,6 +60,9 @@ export const COLORS = {
   HUD_TEXT: '#ffffff',
 };
 
+// CPU Bot
+export const CPU_BOT_UID_PREFIX = 'cpu-bot-';
+
 // Tile Types
 export enum TileType {
   FLOOR = 0,

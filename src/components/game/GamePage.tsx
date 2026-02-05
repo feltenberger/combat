@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { GameCanvas, GameCanvasHandle } from './GameCanvas';
 import { TouchControls } from './TouchControls';
 import { GameEngine } from '../../engine/GameEngine';
@@ -11,8 +11,10 @@ import { saveMatchResult } from '../../firebase/matchHistory';
 import { useGameLoop } from '../../hooks/useGameLoop';
 import { PlayerInput, GameState } from '../../types/game';
 import { GameRoom } from '../../types/firebase';
-import { STATE_BROADCAST_INTERVAL, ROUNDS_TO_WIN, TankColor } from '../../config/constants';
+import { STATE_BROADCAST_INTERVAL, ROUNDS_TO_WIN, COUNTDOWN_DURATION, TankColor } from '../../config/constants';
 import { lerpAngle, lerp } from '../../utils/math';
+import { createBot } from '../../bot/BotFactory';
+import { BotBrain } from '../../bot/BotBrain';
 
 interface GamePageProps {
   uid: string | null;
@@ -21,6 +23,7 @@ interface GamePageProps {
 export function GamePage({ uid }: GamePageProps) {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const canvasRef = useRef<GameCanvasHandle>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const rendererRef = useRef(new Renderer());
@@ -39,6 +42,8 @@ export function GamePage({ uid }: GamePageProps) {
   const playerNamesRef = useRef<Record<string, string>>({});
   const playerColorsRef = useRef<Record<string, TankColor>>({});
   const matchResultSavedRef = useRef(false);
+  const isCpuGameRef = useRef(false);
+  const botRef = useRef<BotBrain | null>(null);
 
   // For guest interpolation
   const prevStateRef = useRef<GameState | null>(null);
@@ -46,62 +51,78 @@ export function GamePage({ uid }: GamePageProps) {
   const stateReceivedTimeRef = useRef(0);
   const configRef = useRef<GameRoom['config'] | null>(null);
 
-  // Set up game on config received
+  // Helper to initialize game engine from config
+  const initFromConfig = useCallback((cfg: GameRoom['config']) => {
+    setConfig(cfg);
+    configRef.current = cfg;
+
+    isHost.current = cfg.hostUid === uid;
+    playerOrderRef.current = [cfg.hostUid, cfg.guestUid];
+    playerNamesRef.current = {
+      [cfg.hostUid]: cfg.hostName,
+      [cfg.guestUid]: cfg.guestName,
+    };
+    playerColorsRef.current = {
+      [cfg.hostUid]: cfg.hostColor || 'blue',
+      [cfg.guestUid]: cfg.guestColor || 'red',
+    };
+
+    if (!engineRef.current) {
+      const engine = new GameEngine(cfg.arenaIndex, cfg.roundsToWin || ROUNDS_TO_WIN);
+      engine.addPlayer(cfg.hostUid);
+      engine.addPlayer(cfg.guestUid);
+      engineRef.current = engine;
+      engine.startMatch();
+    }
+  }, [uid]);
+
+  // CPU game setup — fully local, no Firebase
   useEffect(() => {
+    const cpuConfig = (location.state as { cpuConfig?: GameRoom['config'] })?.cpuConfig;
+    if (!cpuConfig || !uid) return;
+
+    isCpuGameRef.current = true;
+    botRef.current = createBot(cpuConfig.cpuDifficulty!);
+    inputManagerRef.current.bind();
+    initFromConfig(cpuConfig);
+
+    return () => {
+      inputManagerRef.current.unbind();
+    };
+  }, [uid, location.state, initFromConfig]);
+
+  // Online game setup — uses Firebase
+  useEffect(() => {
+    const cpuConfig = (location.state as { cpuConfig?: GameRoom['config'] })?.cpuConfig;
+    if (cpuConfig) return; // CPU games handled above
     if (!uid || !gameId) return;
 
     const sync = new GameSyncService(gameId, uid);
     syncRef.current = sync;
 
-    // Setup disconnect detection
     sync.setupDisconnect();
-
     inputManagerRef.current.bind();
 
     let presenceSetUp = false;
 
     sync.listenToConfig((cfg) => {
       if (!cfg) return;
-      setConfig(cfg);
-      configRef.current = cfg;
+      initFromConfig(cfg);
 
-      isHost.current = cfg.hostUid === uid;
-      playerOrderRef.current = [cfg.hostUid, cfg.guestUid];
-      playerNamesRef.current = {
-        [cfg.hostUid]: cfg.hostName,
-        [cfg.guestUid]: cfg.guestName,
-      };
-      playerColorsRef.current = {
-        [cfg.hostUid]: cfg.hostColor || 'blue',
-        [cfg.guestUid]: cfg.guestColor || 'red',
-      };
+      if (!engineRef.current) return;
 
-      // Initialize engine
-      if (!engineRef.current) {
-        const engine = new GameEngine(cfg.arenaIndex, cfg.roundsToWin || ROUNDS_TO_WIN);
-        engine.addPlayer(cfg.hostUid);
-        engine.addPlayer(cfg.guestUid);
-        engineRef.current = engine;
-
-        if (isHost.current) {
-          // Host starts the match
-          engine.startMatch();
-
-          // Listen for guest input
-          sync.listenToInput(cfg.guestUid, (input) => {
-            remoteInputRef.current = input;
-          });
-        } else {
-          // Guest listens for state
-          sync.listenToState((state) => {
-            prevStateRef.current = nextStateRef.current;
-            nextStateRef.current = state;
-            stateReceivedTimeRef.current = performance.now();
-          });
-        }
+      if (isHost.current) {
+        sync.listenToInput(cfg.guestUid, (input) => {
+          remoteInputRef.current = input;
+        });
+      } else {
+        sync.listenToState((state) => {
+          prevStateRef.current = nextStateRef.current;
+          nextStateRef.current = state;
+          stateReceivedTimeRef.current = performance.now();
+        });
       }
 
-      // Listen for opponent disconnect (only set up once)
       if (!presenceSetUp) {
         presenceSetUp = true;
         const opponentUid = cfg.hostUid === uid ? cfg.guestUid : cfg.hostUid;
@@ -110,7 +131,6 @@ export function GamePage({ uid }: GamePageProps) {
           if (online) {
             opponentSeen = true;
           } else if (opponentSeen) {
-            // Only mark disconnected after we've seen them online at least once
             setDisconnected(true);
           }
         });
@@ -121,7 +141,7 @@ export function GamePage({ uid }: GamePageProps) {
       inputManagerRef.current.unbind();
       sync.cleanup();
     };
-  }, [uid, gameId]);
+  }, [uid, gameId, location.state, initFromConfig]);
 
   // Game loop
   useGameLoop((dt) => {
@@ -130,31 +150,50 @@ export function GamePage({ uid }: GamePageProps) {
     if (!engine || !ctx) return;
 
     if (isHost.current) {
-      // Host: run simulation with local + remote input
       const localInput = inputManagerRef.current.getInput();
       const inputs = new Map<string, PlayerInput>();
       inputs.set(uid!, localInput);
-      inputs.set(
-        playerOrderRef.current.find(id => id !== uid) || '',
-        remoteInputRef.current
-      );
+
+      const opponentUid = playerOrderRef.current.find(id => id !== uid) || '';
+
+      if (isCpuGameRef.current && botRef.current) {
+        // Generate bot input locally
+        const botInput = botRef.current.update({
+          myUid: opponentUid,
+          opponentUid: uid!,
+          gameState: engine.getState(),
+          arena: engine.arena,
+          dt,
+          gameTime: 0,
+        });
+        inputs.set(opponentUid, botInput);
+
+        // Reset bot on new round
+        if (engine.phase === 'COUNTDOWN' && engine.countdown >= COUNTDOWN_DURATION - 0.1) {
+          botRef.current.reset();
+        }
+      } else {
+        inputs.set(opponentUid, remoteInputRef.current);
+      }
 
       engine.update(dt, inputs);
 
-      // Write own input for sync
-      syncRef.current?.writeInput(localInput);
+      if (!isCpuGameRef.current) {
+        syncRef.current?.writeInput(localInput);
 
-      // Broadcast state at STATE_BROADCAST_RATE
-      const now = performance.now();
-      if (now - lastBroadcastRef.current >= STATE_BROADCAST_INTERVAL) {
-        syncRef.current?.writeState(engine.getState());
-        lastBroadcastRef.current = now;
+        const now = performance.now();
+        if (now - lastBroadcastRef.current >= STATE_BROADCAST_INTERVAL) {
+          syncRef.current?.writeState(engine.getState());
+          lastBroadcastRef.current = now;
+        }
       }
 
       // Save match result when match is over
       if (engine.phase === 'MATCH_OVER' && !matchResultSavedRef.current) {
         matchResultSavedRef.current = true;
-        syncRef.current?.finishGame();
+        if (!isCpuGameRef.current) {
+          syncRef.current?.finishGame();
+        }
         const cfg = configRef.current;
         if (cfg && engine.matchWinner) {
           saveMatchResult({
@@ -170,6 +209,7 @@ export function GamePage({ uid }: GamePageProps) {
             rounds: engine.round,
             arenaIndex: cfg.arenaIndex,
             completedAt: Date.now(),
+            cpuDifficulty: cfg.cpuDifficulty,
           });
         }
       }
@@ -178,17 +218,14 @@ export function GamePage({ uid }: GamePageProps) {
       const localInput = inputManagerRef.current.getInput();
       syncRef.current?.writeInput(localInput);
 
-      // Interpolation between prev and next state
       if (nextStateRef.current) {
         if (prevStateRef.current && stateReceivedTimeRef.current > 0) {
           const elapsed = performance.now() - stateReceivedTimeRef.current;
           const t = Math.min(elapsed / STATE_BROADCAST_INTERVAL, 1);
 
-          // Create interpolated state
           const prev = prevStateRef.current;
           const next = nextStateRef.current;
 
-          // Build interpolated tank states
           const nextTanks = next.tanks || {};
           const prevTanks = prev.tanks || {};
           for (const tankUid of Object.keys(nextTanks)) {
@@ -208,7 +245,6 @@ export function GamePage({ uid }: GamePageProps) {
             }
           }
 
-          // Snap non-interpolatable state
           engine.phase = next.phase;
           engine.round = next.round;
           engine.countdown = next.countdown;
@@ -216,14 +252,12 @@ export function GamePage({ uid }: GamePageProps) {
           engine.matchWinner = next.matchWinner;
           if (next.rockHP) engine.arena.setRockHPFromMap(next.rockHP);
 
-          // Update scores
           if (next.scores) {
             for (const [scoreUid, score] of Object.entries(next.scores)) {
               engine.scores.set(scoreUid, score);
             }
           }
 
-          // Update bullets directly from state (Firebase strips empty arrays)
           const nextBullets = Array.isArray(next.bullets) ? next.bullets : [];
           const prevBullets = Array.isArray(prev.bullets) ? prev.bullets : [];
           engine.bullets = [];
@@ -241,7 +275,6 @@ export function GamePage({ uid }: GamePageProps) {
         }
       }
 
-      // Still update particles locally for smoothness
       engine.particles.update(dt);
     }
 

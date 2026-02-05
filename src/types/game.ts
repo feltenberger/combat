@@ -67,6 +67,8 @@ export interface GameState {
 
 import { TankColor } from '../config/constants';
 
+export type BotDifficulty = 'easy' | 'defensive' | 'offensive' | 'hard';
+
 export interface GameConfig {
   arenaIndex: number;
   roundsToWin: number;
@@ -76,4 +78,5 @@ export interface GameConfig {
   guestName: string;
   hostColor: TankColor;
   guestColor: TankColor;
+  cpuDifficulty?: BotDifficulty;
 }
