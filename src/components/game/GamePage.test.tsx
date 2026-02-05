@@ -6,6 +6,7 @@ const mockNavigate = vi.fn();
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ gameId: 'test-game' }),
   useNavigate: () => mockNavigate,
+  useLocation: () => ({ state: null, pathname: '/game/test-game', search: '', hash: '', key: 'default' }),
 }));
 
 // Mock Firebase services
