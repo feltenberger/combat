@@ -65,9 +65,14 @@ The **challenger** is the host and runs the game simulation. Host reads local + 
 - `onDisconnect` handlers manage presence and game abandonment
 - Guest interpolation uses a 100ms buffer (`INTERPOLATION_BUFFER_MS` in constants)
 
+### Arenas
+
+4 arenas defined programmatically in `Arena.ts` as 30x20 tile grids (no external map files). Tile types: FLOOR (0), WALL (1, indestructible), ROCK (2, destructible 3 HP), SPAWN_1 (3), SPAWN_2 (4). Arena index is selected during the challenge flow and stored in game config.
+
 ### Physics
 
 - Fixed 60 Hz timestep with accumulator pattern (`PHYSICS_STEP` = 1/60)
+- Canvas is fixed at 960x640 (30 cols x 20 rows, 32px tiles)
 - Tank rotation movement (not strafing) — left/right rotate, up/down move in facing direction
 - 1 bullet per player, 0.5s cooldown, 3s lifetime, bullets bounce off walls and destroy rocks
 - Rocks have 3 HP with visual damage states, become passable rubble at 0
