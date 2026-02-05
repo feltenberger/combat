@@ -1,5 +1,5 @@
 import { BotDifficulty } from '../types/game';
-import { TankColor, ROUNDS_TO_WIN } from '../config/constants';
+import { TankColor, ROUNDS_TO_WIN, DEFAULT_FIRE_RATE } from '../config/constants';
 import { getCpuUid } from '../bot/BotFactory';
 import { CPU_DEFAULT_COLORS, CPU_DIFFICULTY_NAMES } from '../bot/cpuConstants';
 import { GameRoom } from '../types/firebase';
@@ -14,7 +14,8 @@ export function buildCpuGameConfig(
   hostName: string,
   hostColor: TankColor,
   difficulty: BotDifficulty,
-  arenaIndex: number
+  arenaIndex: number,
+  fireRate: number = DEFAULT_FIRE_RATE
 ): { gameId: string; config: GameRoom['config'] } {
   const gameId = `cpu_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const cpuUid = getCpuUid(difficulty);
@@ -37,6 +38,7 @@ export function buildCpuGameConfig(
       hostColor,
       guestColor,
       cpuDifficulty: difficulty,
+      fireRate,
       createdAt: Date.now(),
     },
   };

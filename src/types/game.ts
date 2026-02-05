@@ -80,4 +80,5 @@ export interface GameConfig {
   hostColor: TankColor;
   guestColor: TankColor;
   cpuDifficulty?: BotDifficulty;
+  fireRate?: number;
 }

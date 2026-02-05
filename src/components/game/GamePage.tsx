@@ -11,7 +11,7 @@ import { saveMatchResult } from '../../firebase/matchHistory';
 import { useGameLoop } from '../../hooks/useGameLoop';
 import { PlayerInput, GameState } from '../../types/game';
 import { GameRoom } from '../../types/firebase';
-import { STATE_BROADCAST_INTERVAL, ROUNDS_TO_WIN, COUNTDOWN_DURATION, TankColor } from '../../config/constants';
+import { STATE_BROADCAST_INTERVAL, ROUNDS_TO_WIN, COUNTDOWN_DURATION, TankColor, DEFAULT_FIRE_RATE } from '../../config/constants';
 import { lerpAngle, lerp } from '../../utils/math';
 import { createBot } from '../../bot/BotFactory';
 import { BotBrain } from '../../bot/BotBrain';
@@ -70,7 +70,7 @@ export function GamePage({ uid }: GamePageProps) {
     };
 
     if (!engineRef.current) {
-      const engine = new GameEngine(cfg.arenaIndex, cfg.roundsToWin || ROUNDS_TO_WIN);
+      const engine = new GameEngine(cfg.arenaIndex, cfg.roundsToWin || ROUNDS_TO_WIN, cfg.fireRate ?? DEFAULT_FIRE_RATE);
       engine.addPlayer(cfg.hostUid);
       engine.addPlayer(cfg.guestUid);
       engineRef.current = engine;

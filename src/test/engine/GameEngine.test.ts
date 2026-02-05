@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { GameEngine } from '../../engine/GameEngine';
 import { PlayerInput } from '../../types/game';
-import { COUNTDOWN_DURATION, ROUND_OVER_DELAY, ROUNDS_TO_WIN } from '../../config/constants';
+import { COUNTDOWN_DURATION, ROUND_OVER_DELAY, ROUNDS_TO_WIN, FIRE_RATE_PRESETS, DEFAULT_FIRE_RATE } from '../../config/constants';
 
 function noInput(): PlayerInput {
   return { left: false, right: false, up: false, down: false, fire: false, timestamp: 0 };
@@ -141,6 +141,90 @@ describe('GameEngine', () => {
       engine.update(0.1, inputs);
       expect(engine.phase).toBe('MATCH_OVER');
       expect(engine.matchWinner).toBe('p1');
+    });
+  });
+
+  describe('fire rate presets', () => {
+    it('defaults to Classic preset (1 bullet, 0.5s cooldown)', () => {
+      const eng = new GameEngine(0, ROUNDS_TO_WIN);
+      eng.addPlayer('p1');
+      eng.addPlayer('p2');
+      eng.startMatch();
+
+      const inputs = new Map<string, PlayerInput>();
+      inputs.set('p1', { ...noInput(), fire: true });
+      inputs.set('p2', noInput());
+
+      // Advance past countdown
+      eng.update(COUNTDOWN_DURATION + 0.1, inputs);
+      // Fire first bullet
+      eng.update(0.02, inputs);
+      expect(eng.bullets.length).toBe(1);
+      // Second fire should be blocked by cooldown (0.5s) and max 1 bullet
+      eng.update(0.02, inputs);
+      expect(eng.bullets.length).toBe(1);
+    });
+
+    it('Rapid preset allows up to 5 bullets with 0.1s cooldown', () => {
+      const eng = new GameEngine(0, ROUNDS_TO_WIN, 0); // Rapid
+      eng.addPlayer('p1');
+      eng.addPlayer('p2');
+      eng.startMatch();
+
+      const inputs = new Map<string, PlayerInput>();
+      inputs.set('p1', { ...noInput(), fire: true });
+      inputs.set('p2', noInput());
+
+      // Advance past countdown
+      eng.update(COUNTDOWN_DURATION + 0.1, inputs);
+
+      // Fire multiple bullets with enough cooldown between each
+      let bulletsFired = 0;
+      for (let i = 0; i < 10; i++) {
+        eng.update(0.15, inputs); // > 0.1s cooldown
+        bulletsFired = eng.bullets.length;
+        if (bulletsFired >= 5) break;
+      }
+      expect(bulletsFired).toBe(5);
+    });
+
+    it('Fast preset allows up to 3 bullets', () => {
+      const eng = new GameEngine(0, ROUNDS_TO_WIN, 1); // Fast
+      eng.addPlayer('p1');
+      eng.addPlayer('p2');
+      eng.startMatch();
+
+      const inputs = new Map<string, PlayerInput>();
+      inputs.set('p1', { ...noInput(), fire: true });
+      inputs.set('p2', noInput());
+
+      eng.update(COUNTDOWN_DURATION + 0.1, inputs);
+
+      let bulletsFired = 0;
+      for (let i = 0; i < 10; i++) {
+        eng.update(0.25, inputs); // > 0.2s cooldown
+        bulletsFired = eng.bullets.length;
+        if (bulletsFired >= 3) break;
+      }
+      expect(bulletsFired).toBe(3);
+    });
+
+    it('falls back to Classic for invalid fire rate index', () => {
+      const eng = new GameEngine(0, ROUNDS_TO_WIN, 99);
+      eng.addPlayer('p1');
+      eng.addPlayer('p2');
+      eng.startMatch();
+
+      const inputs = new Map<string, PlayerInput>();
+      inputs.set('p1', { ...noInput(), fire: true });
+      inputs.set('p2', noInput());
+
+      eng.update(COUNTDOWN_DURATION + 0.1, inputs);
+      eng.update(0.02, inputs);
+      expect(eng.bullets.length).toBe(1);
+      // Should behave like Classic (max 1 bullet)
+      eng.update(0.02, inputs);
+      expect(eng.bullets.length).toBe(1);
     });
   });
 

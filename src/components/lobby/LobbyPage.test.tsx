@@ -57,6 +57,13 @@ describe('LobbyPage', () => {
     expect(screen.getByPlaceholderText('Enter your name')).toBeInTheDocument();
   });
 
+  it('renders Fire Rate slider when name is set', () => {
+    localStorage.setItem('combat-name', 'TestPlayer');
+    render(<LobbyPage uid="test-uid" />);
+    expect(screen.getByText('Fire Rate')).toBeInTheDocument();
+    expect(screen.getByRole('slider')).toBeInTheDocument();
+  });
+
   it('submitting a new name updates the displayed name', async () => {
     const user = userEvent.setup();
     localStorage.setItem('combat-name', 'OldName');

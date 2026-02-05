@@ -7,12 +7,13 @@ import { CpuPlayButton } from './CpuPlayButton';
 import { ChallengeModal } from './ChallengeModal';
 import { IncomingChallenge } from './IncomingChallenge';
 import { ColorPicker } from './ColorPicker';
+import { FireRateSlider } from './FireRateSlider';
 import { useFirebasePresence } from '../../hooks/useFirebasePresence';
 import { sendChallenge, listenToChallenge, acceptChallenge, rejectChallenge, clearChallenge } from '../../firebase/lobby';
 import { buildCpuGameConfig } from '../../firebase/cpuGame';
 import { ChallengeData } from '../../types/firebase';
 import { BotDifficulty } from '../../types/game';
-import { TankColor } from '../../config/constants';
+import { TankColor, DEFAULT_FIRE_RATE } from '../../config/constants';
 import { ARENAS } from '../../engine/Arena';
 import { getCpuUid, isCpuUid } from '../../bot/BotFactory';
 import { CPU_DEFAULT_COLORS, CPU_DIFFICULTY_NAMES } from '../../bot/cpuConstants';
@@ -31,6 +32,7 @@ export function LobbyPage({ uid }: LobbyPageProps) {
   const [challengingName, setChallengingName] = useState('');
   const [incomingChallenge, setIncomingChallenge] = useState<ChallengeData | null>(null);
   const [selectedArena, setSelectedArena] = useState(0);
+  const [fireRate, setFireRate] = useState(DEFAULT_FIRE_RATE);
 
   const navigate = useNavigate();
   const { onlinePlayers } = useFirebasePresence(
@@ -87,9 +89,9 @@ export function LobbyPage({ uid }: LobbyPageProps) {
 
   const handleStartCpuGame = useCallback((difficulty: BotDifficulty) => {
     if (!uid || !name) return;
-    const { gameId, config: cpuConfig } = buildCpuGameConfig(uid, name, color, difficulty, selectedArena);
+    const { gameId, config: cpuConfig } = buildCpuGameConfig(uid, name, color, difficulty, selectedArena, fireRate);
     navigate(`/game/${gameId}`, { state: { cpuConfig } });
-  }, [uid, name, color, selectedArena, navigate]);
+  }, [uid, name, color, selectedArena, fireRate, navigate]);
 
   const handleChallenge = useCallback((targetUid: string, targetName: string) => {
     if (!uid || !name) return;
@@ -103,7 +105,7 @@ export function LobbyPage({ uid }: LobbyPageProps) {
 
     setChallengingUid(targetUid);
     setChallengingName(targetName);
-    sendChallenge(uid, name, targetUid, targetName, selectedArena, color);
+    sendChallenge(uid, name, targetUid, targetName, selectedArena, color, fireRate);
 
     // Listen for response on the target's challenge node
     const unsub = listenToChallenge(targetUid, (challenge) => {
@@ -120,7 +122,7 @@ export function LobbyPage({ uid }: LobbyPageProps) {
         navigate(`/game/${challenge.gameId}`);
       }
     });
-  }, [uid, name, selectedArena, color, navigate, handleStartCpuGame]);
+  }, [uid, name, selectedArena, color, fireRate, navigate, handleStartCpuGame]);
 
   const handleCancelChallenge = () => {
     if (challengingUid) {
@@ -179,11 +181,6 @@ export function LobbyPage({ uid }: LobbyPageProps) {
           </div>
         </div>
 
-        <div className="color-select">
-          <h3>Tank Color</h3>
-          <ColorPicker selected={color} onChange={handleColorChange} />
-        </div>
-
         <CpuPlayButton onStartCpuGame={handleStartCpuGame} />
 
         <PlayerList
@@ -191,6 +188,16 @@ export function LobbyPage({ uid }: LobbyPageProps) {
           onChallenge={handleChallenge}
           challengingUid={challengingUid}
         />
+
+        <div className="color-select">
+          <h3>Tank Color</h3>
+          <ColorPicker selected={color} onChange={handleColorChange} />
+        </div>
+
+        <div className="fire-rate-select">
+          <h3>Fire Rate</h3>
+          <FireRateSlider value={fireRate} onChange={setFireRate} />
+        </div>
       </div>
 
       {challengingUid && (

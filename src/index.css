@@ -205,6 +205,76 @@ button.small {
   color: #fff;
 }
 
+/* Fire Rate Select */
+.fire-rate-select {
+  margin-bottom: 2rem;
+}
+
+.fire-rate-select h3 {
+  color: #aaa;
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.fire-rate-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.fire-rate-slider input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: #2a2a4a;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.fire-rate-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: #4a90d9;
+  border-radius: 50%;
+  border: 2px solid #5aa0e9;
+  cursor: pointer;
+}
+
+.fire-rate-slider input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: #4a90d9;
+  border-radius: 50%;
+  border: 2px solid #5aa0e9;
+  cursor: pointer;
+}
+
+.fire-rate-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.fire-rate-labels .active {
+  color: #ffdd44;
+  font-weight: bold;
+}
+
+.fire-rate-detail {
+  font-size: 0.75rem;
+  color: #888;
+  text-align: center;
+}
+
 /* CPU Play Section */
 .cpu-play-section {
   margin-bottom: 2rem;

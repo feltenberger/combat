@@ -1,7 +1,7 @@
 import { ref, set, onValue, off, remove, push } from 'firebase/database';
 import { rtdb } from '../config/firebase';
 import { ChallengeData } from '../types/firebase';
-import { TankColor } from '../config/constants';
+import { TankColor, DEFAULT_FIRE_RATE } from '../config/constants';
 
 export function sendChallenge(
   fromUid: string,
@@ -10,6 +10,7 @@ export function sendChallenge(
   toName: string,
   arenaIndex: number = 0,
   fromColor: TankColor = 'blue',
+  fireRate: number = DEFAULT_FIRE_RATE,
 ): string {
   const challengeRef = ref(rtdb, `challenges/${toUid}`);
   const challenge: ChallengeData = {
@@ -20,6 +21,7 @@ export function sendChallenge(
     status: 'pending',
     arenaIndex,
     fromColor,
+    fireRate,
     timestamp: Date.now(),
   };
   set(challengeRef, challenge);
@@ -56,6 +58,7 @@ export async function acceptChallenge(
     guestName: challenge.toName,
     hostColor: challenge.fromColor || 'blue',
     guestColor,
+    fireRate: challenge.fireRate ?? DEFAULT_FIRE_RATE,
     createdAt: Date.now(),
   });
 

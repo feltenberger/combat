@@ -16,6 +16,7 @@ export interface ChallengeData {
   gameId?: string;
   arenaIndex: number;
   fromColor?: TankColor;
+  fireRate?: number;
   timestamp: number;
 }
 
@@ -31,6 +32,7 @@ export interface GameRoom {
     guestColor: TankColor;
     createdAt: number;
     cpuDifficulty?: BotDifficulty;
+    fireRate?: number;
   };
   state?: Record<string, unknown>;
   input?: Record<string, Record<string, unknown>>;

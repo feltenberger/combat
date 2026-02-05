@@ -16,6 +16,22 @@ export const BULLET_LIFETIME = 3; // seconds
 export const MAX_BULLETS_PER_PLAYER = 1;
 export const BULLET_COOLDOWN = 0.5; // seconds between shots
 
+// Fire Rate Presets
+export interface FireRatePreset {
+  label: string;
+  cooldown: number;
+  maxBullets: number;
+}
+
+export const FIRE_RATE_PRESETS: FireRatePreset[] = [
+  { label: 'Rapid', cooldown: 0.1, maxBullets: 5 },
+  { label: 'Fast', cooldown: 0.2, maxBullets: 3 },
+  { label: 'Normal', cooldown: 0.35, maxBullets: 2 },
+  { label: 'Classic', cooldown: 0.5, maxBullets: 1 },
+];
+
+export const DEFAULT_FIRE_RATE = 3; // Classic
+
 // Rocks
 export const ROCK_MAX_HP = 3;
 

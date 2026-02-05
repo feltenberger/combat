@@ -9,9 +9,9 @@ import {
   ROUNDS_TO_WIN,
   COUNTDOWN_DURATION,
   ROUND_OVER_DELAY,
-  MAX_BULLETS_PER_PLAYER,
-  BULLET_COOLDOWN,
   TILE_SIZE,
+  FIRE_RATE_PRESETS,
+  DEFAULT_FIRE_RATE,
 } from '../config/constants';
 
 export class GameEngine {
@@ -33,10 +33,15 @@ export class GameEngine {
   private gameTime: number = 0;
   private playerOrder: string[] = [];
   private bulletIdCounter: number = 0;
+  private bulletCooldownValue: number;
+  private maxBulletsPerPlayer: number;
 
-  constructor(arenaIndex: number, roundsToWin: number = ROUNDS_TO_WIN) {
+  constructor(arenaIndex: number, roundsToWin: number = ROUNDS_TO_WIN, fireRate: number = DEFAULT_FIRE_RATE) {
     this.arena = new Arena(arenaIndex);
     this.roundsToWin = roundsToWin;
+    const preset = FIRE_RATE_PRESETS[fireRate] ?? FIRE_RATE_PRESETS[DEFAULT_FIRE_RATE];
+    this.bulletCooldownValue = preset.cooldown;
+    this.maxBulletsPerPlayer = preset.maxBullets;
   }
 
   addPlayer(uid: string): void {
@@ -135,7 +140,7 @@ export class GameEngine {
       // Handle firing
       if (input.fire && tank.alive && tank.bulletCooldown <= 0) {
         const bulletCount = this.bullets.filter(b => b.ownerId === uid && b.alive).length;
-        if (bulletCount < MAX_BULLETS_PER_PLAYER) {
+        if (bulletCount < this.maxBulletsPerPlayer) {
           const spawnPt = tank.getBulletSpawnPoint();
           const bullet = new Bullet(
             `${uid}_${this.bulletIdCounter++}`,
@@ -146,7 +151,7 @@ export class GameEngine {
             this.gameTime
           );
           this.bullets.push(bullet);
-          tank.bulletCooldown = BULLET_COOLDOWN;
+          tank.bulletCooldown = this.bulletCooldownValue;
         }
       }
     }

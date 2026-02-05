@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildCpuGameConfig } from '../../firebase/cpuGame';
-import { ROUNDS_TO_WIN } from '../../config/constants';
+import { ROUNDS_TO_WIN, DEFAULT_FIRE_RATE } from '../../config/constants';
 import { CPU_DEFAULT_COLORS, CPU_DIFFICULTY_NAMES } from '../../bot/cpuConstants';
 import { BotDifficulty } from '../../types/game';
 
@@ -73,6 +73,16 @@ describe('buildCpuGameConfig', () => {
         expect(config.guestColor).not.toBe(config.hostColor);
       }
     }
+  });
+
+  it('defaults fireRate to DEFAULT_FIRE_RATE when not specified', () => {
+    const { config } = buildCpuGameConfig('uid1', 'Alice', 'blue', 'easy', 0);
+    expect(config.fireRate).toBe(DEFAULT_FIRE_RATE);
+  });
+
+  it('stores custom fireRate in config', () => {
+    const { config } = buildCpuGameConfig('uid1', 'Alice', 'blue', 'easy', 0, 0);
+    expect(config.fireRate).toBe(0);
   });
 
   it('sets a createdAt timestamp', () => {
