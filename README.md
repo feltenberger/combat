@@ -9,7 +9,6 @@ A web-based multiplayer remake of the classic Atari 2600 Combat. Two players bat
 - **Real-time multiplayer** - challenge any online player from the lobby
 - **4 arenas** - Open Field, Simple Maze, Complex Maze, Fortress
 - **Destructible rocks** - blast through cover (3 hits to destroy)
-- **Bullet ricochet** - shots bounce off walls
 - **Round-based matches** - first to 2 rounds wins
 - **Match history** - rolling scoreboard of completed games
 - **Mobile support** - virtual joystick and fire button on touch devices
