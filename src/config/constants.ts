@@ -82,6 +82,31 @@ export const COLORS = {
 // CPU Bot
 export const CPU_BOT_UID_PREFIX = 'cpu-bot-';
 
+// Sound - SFX
+export const SFX_MASTER_VOLUME = 0.3;
+export const GUNSHOT_FREQ_START = 600;
+export const GUNSHOT_FREQ_END = 100;
+export const GUNSHOT_DURATION = 0.08;
+export const GUNSHOT_VOLUME = 0.4;
+export const ROCK_HIT_FREQ = 800;
+export const ROCK_HIT_DURATION = 0.12;
+export const ROCK_HIT_VOLUME = 0.3;
+export const WALL_HIT_FREQ = 300;
+export const WALL_HIT_DURATION = 0.06;
+export const WALL_HIT_VOLUME = 0.25;
+export const EXPLOSION_TONE_FREQ_START = 150;
+export const EXPLOSION_TONE_FREQ_END = 30;
+export const EXPLOSION_NOISE_FREQ = 400;
+export const EXPLOSION_DURATION = 0.4;
+export const EXPLOSION_VOLUME = 0.5;
+
+// Sound - Music
+export const MUSIC_BPM = 140;
+export const MUSIC_VOLUME = 0.12;
+export const MUSIC_MELODY_VOLUME = 0.18;
+export const MUSIC_BASS_VOLUME = 0.15;
+export const MUSIC_DRUM_VOLUME = 0.10;
+
 // Tile Types
 export enum TileType {
   FLOOR = 0,

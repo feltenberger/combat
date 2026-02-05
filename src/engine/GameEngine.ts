@@ -4,6 +4,7 @@ import { Tank } from './Tank';
 import { Bullet } from './Bullet';
 import { ParticleSystem } from './ParticleSystem';
 import { checkBulletTankCollision, checkTankTankCollision, separateTanks } from './Collision';
+import { SoundManager } from './SoundManager';
 import {
   PHYSICS_STEP,
   ROUNDS_TO_WIN,
@@ -19,6 +20,7 @@ export class GameEngine {
   tanks: Map<string, Tank> = new Map();
   bullets: Bullet[] = [];
   particles: ParticleSystem = new ParticleSystem();
+  sound: SoundManager | null = null;
   scores: Map<string, number> = new Map();
 
   phase: MatchPhase = 'WAITING';
@@ -151,6 +153,7 @@ export class GameEngine {
             this.gameTime
           );
           this.bullets.push(bullet);
+          this.sound?.playGunshot();
           tank.bulletCooldown = this.bulletCooldownValue;
         }
       }
@@ -171,11 +174,13 @@ export class GameEngine {
       const result = bullet.update(dt, this.gameTime, this.arena);
       if (result.hitWall) {
         this.particles.spawnWallSpark(bullet.x, bullet.y);
+        this.sound?.playWallHit();
       }
       if (result.hitRock) {
         const rx = result.hitRock.col * TILE_SIZE + TILE_SIZE / 2;
         const ry = result.hitRock.row * TILE_SIZE + TILE_SIZE / 2;
         this.particles.spawnRockHit(rx, ry);
+        this.sound?.playRockHit();
       }
     }
 
@@ -187,6 +192,7 @@ export class GameEngine {
           bullet.alive = false;
           tank.kill();
           this.particles.spawnExplosion(tank.x, tank.y);
+          this.sound?.playExplosion();
 
           // Round over
           const winner = bullet.ownerId;

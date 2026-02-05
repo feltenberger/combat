@@ -15,6 +15,7 @@ import { STATE_BROADCAST_INTERVAL, ROUNDS_TO_WIN, COUNTDOWN_DURATION, TankColor,
 import { lerpAngle, lerp } from '../../utils/math';
 import { createBot } from '../../bot/BotFactory';
 import { BotBrain } from '../../bot/BotBrain';
+import { SoundManager, loadSoundPrefs } from '../../engine/SoundManager';
 
 interface GamePageProps {
   uid: string | null;
@@ -46,12 +47,14 @@ export function GamePage({ uid }: GamePageProps) {
   const matchResultSavedRef = useRef(false);
   const isCpuGameRef = useRef(false);
   const botRef = useRef<BotBrain | null>(null);
+  const soundRef = useRef<SoundManager | null>(null);
 
   // For guest interpolation
   const prevStateRef = useRef<GameState | null>(null);
   const nextStateRef = useRef<GameState | null>(null);
   const stateReceivedTimeRef = useRef(0);
   const configRef = useRef<GameRoom['config'] | null>(null);
+  const lastSoundStateRef = useRef<GameState | null>(null);
 
   // Helper to initialize game engine from config
   const initFromConfig = useCallback((cfg: GameRoom['config']) => {
@@ -73,6 +76,7 @@ export function GamePage({ uid }: GamePageProps) {
       const engine = new GameEngine(cfg.arenaIndex, cfg.roundsToWin || ROUNDS_TO_WIN, cfg.fireRate ?? DEFAULT_FIRE_RATE);
       engine.addPlayer(cfg.hostUid);
       engine.addPlayer(cfg.guestUid);
+      engine.sound = soundRef.current;
       engineRef.current = engine;
       engine.startMatch();
     }
@@ -85,11 +89,17 @@ export function GamePage({ uid }: GamePageProps) {
 
     isCpuGameRef.current = true;
     botRef.current = createBot(cpuConfig.cpuDifficulty!);
+    const sm = new SoundManager();
+    sm.resume();
+    sm.applyPrefs(loadSoundPrefs());
+    soundRef.current = sm;
     inputManagerRef.current.bind();
     initFromConfig(cpuConfig);
 
     return () => {
       inputManagerRef.current.unbind();
+      sm.destroy();
+      soundRef.current = null;
     };
   }, [uid, location.state, initFromConfig]);
 
@@ -98,6 +108,11 @@ export function GamePage({ uid }: GamePageProps) {
     const cpuConfig = (location.state as { cpuConfig?: GameRoom['config'] })?.cpuConfig;
     if (cpuConfig) return; // CPU games handled above
     if (!uid || !gameId) return;
+
+    const sm = new SoundManager();
+    sm.resume();
+    sm.applyPrefs(loadSoundPrefs());
+    soundRef.current = sm;
 
     const sync = new GameSyncService(gameId, uid);
     syncRef.current = sync;
@@ -119,9 +134,59 @@ export function GamePage({ uid }: GamePageProps) {
         });
       } else {
         sync.listenToState((state) => {
-          prevStateRef.current = nextStateRef.current;
+          const prev = nextStateRef.current;
+          prevStateRef.current = prev;
           nextStateRef.current = state;
           stateReceivedTimeRef.current = performance.now();
+
+          // Guest-side sound detection from state diffs
+          const sm = soundRef.current;
+          if (sm && prev && state.phase === 'PLAYING') {
+            const prevBullets = Array.isArray(prev.bullets) ? prev.bullets : [];
+            const nextBullets = Array.isArray(state.bullets) ? state.bullets : [];
+            const prevIds = new Set(prevBullets.map(b => b.id));
+            const nextIds = new Set(nextBullets.map(b => b.id));
+
+            // New bullets → gunshot
+            for (const id of nextIds) {
+              if (!prevIds.has(id)) sm.playGunshot();
+            }
+
+            // Disappeared bullets → wall hit, rock hit, or explosion
+            for (const id of prevIds) {
+              if (!nextIds.has(id)) {
+                // Check if a tank died (explosion)
+                const prevTanks = prev.tanks || {};
+                const nextTanks = state.tanks || {};
+                let tankDied = false;
+                for (const tUid of Object.keys(nextTanks)) {
+                  if (prevTanks[tUid]?.alive && !nextTanks[tUid]?.alive) {
+                    tankDied = true;
+                    break;
+                  }
+                }
+                if (tankDied) {
+                  sm.playExplosion();
+                } else {
+                  // Check if any rock HP decreased
+                  const prevRock = prev.rockHP || {};
+                  const nextRock = state.rockHP || {};
+                  let rockHit = false;
+                  for (const key of Object.keys(nextRock)) {
+                    if (prevRock[key] !== undefined && nextRock[key] < prevRock[key]) {
+                      rockHit = true;
+                      break;
+                    }
+                  }
+                  if (rockHit) {
+                    sm.playRockHit();
+                  } else {
+                    sm.playWallHit();
+                  }
+                }
+              }
+            }
+          }
         });
       }
 
@@ -139,9 +204,18 @@ export function GamePage({ uid }: GamePageProps) {
       }
     });
 
+    // Fallback gesture listener for autoplay policy
+    const resumeOnGesture = () => sm.resume();
+    window.addEventListener('click', resumeOnGesture, { once: true });
+    window.addEventListener('keydown', resumeOnGesture, { once: true });
+
     return () => {
       inputManagerRef.current.unbind();
       sync.cleanup();
+      sm.destroy();
+      soundRef.current = null;
+      window.removeEventListener('click', resumeOnGesture);
+      window.removeEventListener('keydown', resumeOnGesture);
     };
   }, [uid, gameId, location.state, initFromConfig]);
 

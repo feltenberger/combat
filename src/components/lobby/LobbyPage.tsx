@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NameEntry } from './NameEntry';
 import { PlayerList } from './PlayerList';
@@ -18,6 +18,7 @@ import { TankColor, DEFAULT_FIRE_RATE, ROUNDS_TO_WIN } from '../../config/consta
 import { ARENAS } from '../../engine/Arena';
 import { getCpuUid, isCpuUid } from '../../bot/BotFactory';
 import { CPU_DEFAULT_COLORS, CPU_DIFFICULTY_NAMES } from '../../bot/cpuConstants';
+import { SoundManager, loadSoundPrefs, saveSoundPref } from '../../engine/SoundManager';
 
 interface LobbyPageProps {
   uid: string | null;
@@ -45,6 +46,12 @@ export function LobbyPage({ uid }: LobbyPageProps) {
     return saved !== null ? Number(saved) : ROUNDS_TO_WIN;
   });
 
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sfxVolume, setSfxVolume] = useState(() => loadSoundPrefs().sfxVolume);
+  const [sfxMuted, setSfxMuted] = useState(() => loadSoundPrefs().sfxMuted);
+  const [musicVolume, setMusicVolume] = useState(() => loadSoundPrefs().musicVolume);
+  const [musicMuted, setMusicMuted] = useState(() => loadSoundPrefs().musicMuted);
+
   const navigate = useNavigate();
   const { onlinePlayers } = useFirebasePresence(
     hasEnteredName ? uid : null,
@@ -71,6 +78,39 @@ export function LobbyPage({ uid }: LobbyPageProps) {
     });
     return unsub;
   }, [uid, hasEnteredName, navigate]);
+
+  // Lobby music
+  const soundRef = useRef<SoundManager | null>(null);
+  useEffect(() => {
+    if (!hasEnteredName) return;
+    const sm = new SoundManager();
+    sm.resume();
+    sm.applyPrefs(loadSoundPrefs());
+    sm.startMusic();
+    soundRef.current = sm;
+
+    // Fallback: resume on first user gesture (autoplay policy)
+    const resumeOnGesture = () => sm.resume();
+    window.addEventListener('click', resumeOnGesture, { once: true });
+    window.addEventListener('keydown', resumeOnGesture, { once: true });
+
+    return () => {
+      sm.stopMusic();
+      sm.destroy();
+      soundRef.current = null;
+      window.removeEventListener('click', resumeOnGesture);
+      window.removeEventListener('keydown', resumeOnGesture);
+    };
+  }, [hasEnteredName]);
+
+  // Sync volume changes to live SoundManager
+  useEffect(() => {
+    soundRef.current?.setMusicVolume(musicMuted ? 0 : musicVolume);
+  }, [musicVolume, musicMuted]);
+
+  useEffect(() => {
+    soundRef.current?.setSfxVolume(sfxMuted ? 0 : sfxVolume);
+  }, [sfxVolume, sfxMuted]);
 
   const handleNameSubmit = (n: string, c: TankColor) => {
     setName(n);
@@ -100,6 +140,23 @@ export function LobbyPage({ uid }: LobbyPageProps) {
   const handleRoundsToWinChange = (v: number) => {
     setRoundsToWin(v);
     localStorage.setItem('combat-rounds-to-win', String(v));
+  };
+
+  const handleSfxVolumeChange = (v: number) => {
+    setSfxVolume(v);
+    saveSoundPref('sfxVolume', v);
+  };
+  const handleSfxMutedChange = (m: boolean) => {
+    setSfxMuted(m);
+    saveSoundPref('sfxMuted', m);
+  };
+  const handleMusicVolumeChange = (v: number) => {
+    setMusicVolume(v);
+    saveSoundPref('musicVolume', v);
+  };
+  const handleMusicMutedChange = (m: boolean) => {
+    setMusicMuted(m);
+    saveSoundPref('musicMuted', m);
   };
 
   // CPU player entries for the player list
@@ -215,19 +272,78 @@ export function LobbyPage({ uid }: LobbyPageProps) {
           challengingUid={challengingUid}
         />
 
-        <div className="color-select">
-          <h3>Tank Color</h3>
-          <ColorPicker selected={color} onChange={handleColorChange} />
-        </div>
+        <div className="settings-section">
+          <button
+            className="settings-toggle"
+            onClick={() => setSettingsOpen(o => !o)}
+          >
+            Settings {settingsOpen ? '\u25B2' : '\u25BC'}
+          </button>
 
-        <div className="fire-rate-select">
-          <h3>Fire Rate</h3>
-          <FireRateSlider value={fireRate} onChange={handleFireRateChange} />
-        </div>
+          {settingsOpen && (
+            <div className="settings-body">
+              <div className="color-select">
+                <h3>Tank Color</h3>
+                <ColorPicker selected={color} onChange={handleColorChange} />
+              </div>
 
-        <div className="rounds-select">
-          <h3>Rounds to Win</h3>
-          <RoundsToWinSelector value={roundsToWin} onChange={handleRoundsToWinChange} />
+              <div className="fire-rate-select">
+                <h3>Fire Rate</h3>
+                <FireRateSlider value={fireRate} onChange={handleFireRateChange} />
+              </div>
+
+              <div className="rounds-select">
+                <h3>Rounds to Win</h3>
+                <RoundsToWinSelector value={roundsToWin} onChange={handleRoundsToWinChange} />
+              </div>
+
+              <div className="volume-select">
+                <h3>Sound Effects</h3>
+                <div className="volume-row">
+                  <button
+                    className={`volume-toggle ${sfxMuted ? 'muted' : ''}`}
+                    onClick={() => handleSfxMutedChange(!sfxMuted)}
+                    title={sfxMuted ? 'Unmute SFX' : 'Mute SFX'}
+                  >
+                    {sfxMuted ? 'OFF' : 'ON'}
+                  </button>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={sfxVolume}
+                    onChange={e => handleSfxVolumeChange(Number(e.target.value))}
+                    disabled={sfxMuted}
+                    className="volume-slider"
+                  />
+                  <span className="volume-value">{sfxMuted ? '--' : sfxVolume}</span>
+                </div>
+              </div>
+
+              <div className="volume-select">
+                <h3>Music</h3>
+                <div className="volume-row">
+                  <button
+                    className={`volume-toggle ${musicMuted ? 'muted' : ''}`}
+                    onClick={() => handleMusicMutedChange(!musicMuted)}
+                    title={musicMuted ? 'Unmute Music' : 'Mute Music'}
+                  >
+                    {musicMuted ? 'OFF' : 'ON'}
+                  </button>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={musicVolume}
+                    onChange={e => handleMusicVolumeChange(Number(e.target.value))}
+                    disabled={musicMuted}
+                    className="volume-slider"
+                  />
+                  <span className="volume-value">{musicMuted ? '--' : musicVolume}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
