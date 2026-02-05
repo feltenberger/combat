@@ -133,6 +133,8 @@ Render order: arena → bullets → tanks → particles → HUD → overlays. Th
 
 ## Testing
 
+**MANDATORY: Always write or update tests when adding or modifying features.** Every new feature, bug fix, or behavioral change must include corresponding test coverage. If editing existing code, update any affected tests to match the new behavior. Run `npm test` to verify all tests pass before considering work complete.
+
 - Vitest with `happy-dom` environment, globals enabled (no manual `describe`/`it`/`expect` imports needed)
 - Setup file at `src/test/setup.ts` (imports `@testing-library/jest-dom`)
 - Component tests use `@testing-library/react` + `@testing-library/user-event`
