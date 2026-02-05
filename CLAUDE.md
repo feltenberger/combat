@@ -56,6 +56,7 @@ React 19 + TypeScript with Vite. Canvas 2D API for all rendering (960x640, progr
 - `src/components/game/` — Game page, canvas, touch controls
 - `src/components/scoreboard/` — Match history display
 - `src/utils/math.ts` — `lerp()` and `lerpAngle()` used for guest interpolation
+- `src/bot/` — CPU bot system: `BotBrain` interface, `BotFactory`, `EasyBot`, `DefensiveBot`, `OffensiveBot`, `HardBot`, `cpuConstants`
 - `src/types/` — TypeScript interfaces for game state, Firebase data, arena definitions
 
 ### Routes
@@ -94,6 +95,15 @@ The **challenger** is the host and runs the game simulation. Host reads local + 
 - Bullet cooldown and max bullets per player are configurable via `FIRE_RATE_PRESETS` in constants (Rapid/Fast/Normal/Classic). Default is Classic (1 bullet, 0.5s cooldown). Fire rate flows: lobby slider → `ChallengeData.fireRate` → `GameRoom.config.fireRate` → `GameEngine` constructor. 3s lifetime, bullets die on wall/rock contact
 - Rocks have 3 HP with visual damage states, become passable rubble at 0
 - Circle-circle collision for bullet-tank hits, multi-point circle check for tank-wall sliding
+
+### CPU Bots
+
+4 difficulty levels, each with distinct behavior. All tuning constants are in `src/bot/cpuConstants.ts`. CPU games run fully locally (no Firebase).
+
+- **Easy** — Intentionally bad: large aim error (±45° offset that drifts), wide fire tolerance (±60°), 40% fire hesitation, occasional wandering and loss of focus. Moves decently but can't shoot straight.
+- **Defensive** — Keeps distance, retreats when too close, seeks cover, dodges bullets.
+- **Offensive** — Charges aggressively, flanks, fires at close range.
+- **Hard** — Leads shots, dodges bullets, uses A* pathfinding, adapts aggression based on score.
 
 ### State Machine
 
