@@ -30,11 +30,18 @@ export const EASY_WANDER_DURATION_MAX = 2.0;
 export const EASY_FIRE_HESITATION = 0.4; // 40% chance to NOT fire even when aimed
 
 // --- Defensive Bot ---
-export const DEFENSIVE_PREFERRED_DISTANCE = 300; // pixels
-export const DEFENSIVE_RETREAT_DISTANCE = 150; // pixels, retreat when closer
+export const DEFENSIVE_PREFERRED_DISTANCE = 450; // pixels — stay much farther away
+export const DEFENSIVE_RETREAT_DISTANCE = 250; // pixels, start retreating much sooner
 export const DEFENSIVE_AIM_TOLERANCE = Math.PI / 12; // ±15°
 export const DEFENSIVE_DODGE_CORRIDOR = 40; // pixels, bullet threat detection width
 export const DEFENSIVE_COVER_SEARCH_MAX = 8; // max cover positions to evaluate
+export const DEFENSIVE_FIRE_HESITATION = 0.70; // 70% chance to NOT fire even when aimed
+export const DEFENSIVE_CREEP_CHANCE = 0.30; // only move forward 30% of frames
+export const DEFENSIVE_FREEZE_CHANCE = 0.12; // per-second chance to freeze in indecision
+export const DEFENSIVE_FREEZE_DURATION_MIN = 0.5; // seconds
+export const DEFENSIVE_FREEZE_DURATION_MAX = 2.0; // seconds
+export const DEFENSIVE_COVER_LINGER_TIME = 3.0; // stay in cover at least 3s before peeking
+export const DEFENSIVE_PEEK_DURATION = 1.5; // only expose for 1.5s before retreating back
 
 // --- Offensive Bot ---
 export const OFFENSIVE_AIM_TOLERANCE = Math.PI / 8; // ±22.5°

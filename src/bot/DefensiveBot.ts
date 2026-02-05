@@ -7,21 +7,30 @@ import {
 import {
   DEFENSIVE_PREFERRED_DISTANCE, DEFENSIVE_RETREAT_DISTANCE,
   DEFENSIVE_AIM_TOLERANCE, DEFENSIVE_DODGE_CORRIDOR, DEFENSIVE_COVER_SEARCH_MAX,
+  DEFENSIVE_FIRE_HESITATION, DEFENSIVE_CREEP_CHANCE, DEFENSIVE_FREEZE_CHANCE,
+  DEFENSIVE_FREEZE_DURATION_MIN, DEFENSIVE_FREEZE_DURATION_MAX,
+  DEFENSIVE_COVER_LINGER_TIME, DEFENSIVE_PEEK_DURATION,
 } from './cpuConstants';
 
-type DefensiveState = 'PATROL' | 'COVER' | 'RETREAT';
+type DefensiveState = 'CAMP' | 'COVER' | 'RETREAT' | 'PEEK';
 
 export class DefensiveBot implements BotBrain {
   readonly difficulty: BotDifficulty = 'defensive';
 
-  private state: DefensiveState = 'PATROL';
+  private state: DefensiveState = 'CAMP';
   private coverTarget: { x: number; y: number } | null = null;
   private stateTimer: number = 0;
+  private freezeTimer: number = 0;
+  private coverLingerTimer: number = 0;
+  private peekTimer: number = 0;
 
   reset(): void {
-    this.state = 'PATROL';
+    this.state = 'CAMP';
     this.coverTarget = null;
     this.stateTimer = 0;
+    this.freezeTimer = 0;
+    this.coverLingerTimer = 0;
+    this.peekTimer = 0;
   }
 
   update(context: BotContext): PlayerInput {
@@ -35,24 +44,41 @@ export class DefensiveBot implements BotBrain {
     const dist = distanceBetween(myTank.x, myTank.y, opTank.x, opTank.y);
     const bullets = Array.isArray(gameState.bullets) ? gameState.bullets : [];
 
-    // Check for bullet threats first — dodge takes priority
+    // Check for bullet threats first — dodge takes priority over everything
     const dodgeInput = this.checkDodge(bullets, myTank, myUid, arena);
     if (dodgeInput) return dodgeInput;
 
+    // Handle freeze (complete indecision)
+    if (this.freezeTimer > 0) {
+      this.freezeTimer -= dt;
+      return noInput();
+    }
+
+    // Random freeze chance (per-second probability scaled by dt)
+    if (Math.random() < DEFENSIVE_FREEZE_CHANCE * dt) {
+      this.freezeTimer = DEFENSIVE_FREEZE_DURATION_MIN +
+        Math.random() * (DEFENSIVE_FREEZE_DURATION_MAX - DEFENSIVE_FREEZE_DURATION_MIN);
+      return noInput();
+    }
+
     // State transitions
-    if (dist < DEFENSIVE_RETREAT_DISTANCE) {
+    if (dist < DEFENSIVE_RETREAT_DISTANCE && this.state !== 'RETREAT') {
       this.state = 'RETREAT';
-    } else if (dist > DEFENSIVE_PREFERRED_DISTANCE && this.state === 'RETREAT') {
-      this.state = 'PATROL';
+      this.stateTimer = 0;
+    } else if (this.state === 'RETREAT' && dist > DEFENSIVE_PREFERRED_DISTANCE) {
+      this.state = 'CAMP';
+      this.stateTimer = 0;
     }
 
     switch (this.state) {
-      case 'PATROL':
-        return this.patrol(myTank, opTank, arena, dist);
+      case 'CAMP':
+        return this.camp(myTank, opTank, arena, dist);
       case 'COVER':
         return this.seekCover(myTank, opTank, arena);
+      case 'PEEK':
+        return this.peek(myTank, opTank, arena, dt);
       case 'RETREAT':
-        return this.retreat(myTank, opTank, arena);
+        return this.retreat(myTank, opTank);
       default:
         return noInput();
     }
@@ -77,7 +103,7 @@ export class DefensiveBot implements BotBrain {
     return null;
   }
 
-  private patrol(
+  private camp(
     myTank: { x: number; y: number; angle: number },
     opTank: { x: number; y: number },
     arena: import('../engine/Arena').Arena,
@@ -87,19 +113,24 @@ export class DefensiveBot implements BotBrain {
     const hasLOS = hasLineOfSight(myTank.x, myTank.y, opTank.x, opTank.y, arena);
     const aimed = isAimingAt(myTank.angle, targetAngle, DEFENSIVE_AIM_TOLERANCE);
 
-    // Fire only with clear LOS and tight aim
-    const shouldFire = hasLOS && aimed;
-
-    // Maintain preferred distance
-    const moveForward = dist > DEFENSIVE_PREFERRED_DISTANCE + 50;
-    const moveBack = dist < DEFENSIVE_PREFERRED_DISTANCE - 50;
-
-    if (!hasLOS && this.stateTimer > 1.5) {
-      // Seek cover if we can't see the opponent
+    // If opponent has LOS on us, actively seek cover to hide
+    if (hasLOS) {
       this.state = 'COVER';
       this.coverTarget = null;
+      this.coverLingerTimer = 0;
       this.stateTimer = 0;
+      return noInput();
     }
+
+    // Fire only with clear LOS, tight aim, AND passing hesitation check
+    const shouldFire = hasLOS && aimed && Math.random() > DEFENSIVE_FIRE_HESITATION;
+
+    // Creep movement — only move a fraction of frames (simulates hesitant, slow movement)
+    const wantsToMove = dist > DEFENSIVE_PREFERRED_DISTANCE + 50;
+    const wantsToMoveBack = dist < DEFENSIVE_PREFERRED_DISTANCE - 50;
+    const creep = Math.random() < DEFENSIVE_CREEP_CHANCE;
+    const moveForward = wantsToMove && creep;
+    const moveBack = wantsToMoveBack && creep;
 
     return angleToInput(myTank.angle, targetAngle, moveForward, moveBack, shouldFire);
   }
@@ -116,7 +147,7 @@ export class DefensiveBot implements BotBrain {
       if (covers.length > 0) {
         this.coverTarget = covers[0];
       } else {
-        this.state = 'PATROL';
+        this.state = 'CAMP';
         this.stateTimer = 0;
         return noInput();
       }
@@ -124,36 +155,59 @@ export class DefensiveBot implements BotBrain {
 
     const dist = distanceBetween(myTank.x, myTank.y, this.coverTarget.x, this.coverTarget.y);
     if (dist < 20) {
-      // Reached cover, go back to patrol
-      this.state = 'PATROL';
-      this.coverTarget = null;
+      // Reached cover — linger here before peeking
+      this.coverLingerTimer += 1 / 60; // approximate frame time
+      if (this.coverLingerTimer >= DEFENSIVE_COVER_LINGER_TIME) {
+        this.state = 'PEEK';
+        this.peekTimer = 0;
+        this.coverLingerTimer = 0;
+        this.stateTimer = 0;
+        return noInput();
+      }
+      // Stay put in cover
+      return noInput();
+    }
+
+    // Move toward cover with intermittent creep
+    const moveAngle = angleTo(myTank.x, myTank.y, this.coverTarget.x, this.coverTarget.y);
+    const creep = Math.random() < DEFENSIVE_CREEP_CHANCE;
+
+    return angleToInput(myTank.angle, moveAngle, creep, false, false);
+  }
+
+  private peek(
+    myTank: { x: number; y: number; angle: number },
+    opTank: { x: number; y: number },
+    arena: import('../engine/Arena').Arena,
+    dt: number
+  ): PlayerInput {
+    this.peekTimer += dt;
+
+    // Peek time expired — go back to cover
+    if (this.peekTimer >= DEFENSIVE_PEEK_DURATION) {
+      this.state = 'COVER';
+      this.coverTarget = null; // Find new cover
+      this.coverLingerTimer = 0;
       this.stateTimer = 0;
       return noInput();
     }
 
-    const moveAngle = angleTo(myTank.x, myTank.y, this.coverTarget.x, this.coverTarget.y);
-
-    // Check if we can fire at opponent on the way
-    const opAngle = angleTo(myTank.x, myTank.y, opTank.x, opTank.y);
+    // During peek: rotate to face opponent, maybe fire once (with hesitation)
+    const targetAngle = angleTo(myTank.x, myTank.y, opTank.x, opTank.y);
     const hasLOS = hasLineOfSight(myTank.x, myTank.y, opTank.x, opTank.y, arena);
-    const aimed = isAimingAt(myTank.angle, opAngle, DEFENSIVE_AIM_TOLERANCE);
+    const aimed = isAimingAt(myTank.angle, targetAngle, DEFENSIVE_AIM_TOLERANCE);
+    const shouldFire = hasLOS && aimed && Math.random() > DEFENSIVE_FIRE_HESITATION;
 
-    return angleToInput(myTank.angle, moveAngle, true, false, hasLOS && aimed);
+    return angleToInput(myTank.angle, targetAngle, false, false, shouldFire);
   }
 
   private retreat(
     myTank: { x: number; y: number; angle: number },
     opTank: { x: number; y: number },
-    arena: import('../engine/Arena').Arena
   ): PlayerInput {
-    // Move away from opponent
-    const awayAngle = angleTo(opTank.x, opTank.y, myTank.x, myTank.y);
+    // Face the opponent but move backward — looks unsure and scared
+    const towardOpponent = angleTo(myTank.x, myTank.y, opTank.x, opTank.y);
 
-    // Fire while retreating if aimed
-    const opAngle = angleTo(myTank.x, myTank.y, opTank.x, opTank.y);
-    const hasLOS = hasLineOfSight(myTank.x, myTank.y, opTank.x, opTank.y, arena);
-    const aimed = isAimingAt(myTank.angle, opAngle, DEFENSIVE_AIM_TOLERANCE);
-
-    return angleToInput(myTank.angle, awayAngle, true, false, hasLOS && aimed);
+    return angleToInput(myTank.angle, towardOpponent, false, true, false);
   }
 }
