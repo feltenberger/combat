@@ -52,7 +52,7 @@ React 19 + TypeScript with Vite. Canvas 2D API for all rendering (960x640, progr
 - `src/firebase/` — Firebase services: `presence`, `lobby`, `gameSync`, `matchHistory`
 - `src/hooks/` — React hooks: `useGameLoop`, `useFirebasePresence`, `useKeyboardInput`
 - `src/config/constants.ts` — All physics values, tile sizes, colors, timing constants
-- `src/components/lobby/` — Name entry, player list, challenges, color picker
+- `src/components/lobby/` — Name entry, player list, challenges, color picker, fire rate slider
 - `src/components/game/` — Game page, canvas, touch controls
 - `src/components/scoreboard/` — Match history display
 - `src/utils/math.ts` — `lerp()` and `lerpAngle()` used for guest interpolation
@@ -89,7 +89,7 @@ The **challenger** is the host and runs the game simulation. Host reads local + 
 - Fixed 60 Hz timestep with accumulator pattern (`PHYSICS_STEP` = 1/60)
 - Canvas is fixed at 960x640 (30 cols x 20 rows, 32px tiles)
 - Tank rotation movement (not strafing) — left/right rotate, up/down move in facing direction
-- 1 bullet per player, 0.5s cooldown, 3s lifetime, bullets die on wall/rock contact
+- Bullet cooldown and max bullets per player are configurable via `FIRE_RATE_PRESETS` in constants (Rapid/Fast/Normal/Classic). Default is Classic (1 bullet, 0.5s cooldown). Fire rate flows: lobby slider → `ChallengeData.fireRate` → `GameRoom.config.fireRate` → `GameEngine` constructor. 3s lifetime, bullets die on wall/rock contact
 - Rocks have 3 HP with visual damage states, become passable rubble at 0
 - Circle-circle collision for bullet-tank hits, multi-point circle check for tank-wall sliding
 
