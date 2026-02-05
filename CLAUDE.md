@@ -13,9 +13,12 @@ npm run dev        # Local dev server (Vite)
 npm run build      # TypeScript check + Vite production build
 npm run lint       # ESLint
 npm run preview    # Preview production build locally
+npm test           # Run all tests (vitest run)
+npm run test:watch # Watch mode (vitest)
+npx vitest run src/renderer/TankRenderer.test.ts  # Single test file
 ```
 
-There are no tests in this project. Validate changes with `npm run build` (runs `tsc -b && vite build`).
+Validate changes with `npm run build` (runs `tsc -b && vite build`) and `npm test`.
 
 ## Deployment
 
@@ -49,6 +52,10 @@ React 19 + TypeScript with Vite. Canvas 2D API for all rendering (960x640, progr
 - `src/firebase/` — Firebase services: `presence`, `lobby`, `gameSync`, `matchHistory`
 - `src/hooks/` — React hooks: `useGameLoop`, `useFirebasePresence`, `useKeyboardInput`
 - `src/config/constants.ts` — All physics values, tile sizes, colors, timing constants
+- `src/components/lobby/` — Name entry, player list, challenges, color picker
+- `src/components/game/` — Game page, canvas, touch controls
+- `src/components/scoreboard/` — Match history display
+- `src/utils/math.ts` — `lerp()` and `lerpAngle()` used for guest interpolation
 - `src/types/` — TypeScript interfaces for game state, Firebase data, arena definitions
 
 ### Routes
@@ -56,6 +63,14 @@ React 19 + TypeScript with Vite. Canvas 2D API for all rendering (960x640, progr
 - `/` — Lobby (name entry, player list, challenge flow)
 - `/game/:gameId` — Active game
 - `/scoreboard` — Match history
+
+### Tank Colors
+
+`TankColor` type (`'blue' | 'red' | 'green' | 'camo'`) and `TANK_COLORS` map defined in `src/config/constants.ts`. Each entry has `main` (body) and `dark` (tracks/turret) hex values.
+
+Color flows through: localStorage → `PresenceData.color` (RTDB) → `ChallengeData.fromColor` → `GameRoom.config.hostColor`/`guestColor` → `Renderer` → `TankRenderer`/`HUDRenderer`.
+
+When the guest accepts a challenge and both players have the same color, `IncomingChallenge` shows a picker with the clashing color disabled so the guest must pick a different one.
 
 ### Networking: Host-Authoritative
 
@@ -74,7 +89,7 @@ The **challenger** is the host and runs the game simulation. Host reads local + 
 - Fixed 60 Hz timestep with accumulator pattern (`PHYSICS_STEP` = 1/60)
 - Canvas is fixed at 960x640 (30 cols x 20 rows, 32px tiles)
 - Tank rotation movement (not strafing) — left/right rotate, up/down move in facing direction
-- 1 bullet per player, 0.5s cooldown, 3s lifetime, bullets bounce off walls and destroy rocks
+- 1 bullet per player, 0.5s cooldown, 3s lifetime, bullets die on wall/rock contact
 - Rocks have 3 HP with visual damage states, become passable rubble at 0
 - Circle-circle collision for bullet-tank hits, multi-point circle check for tank-wall sliding
 
@@ -99,6 +114,19 @@ First to 2 rounds wins. Host writes match result to Firestore on completion.
 **Firestore** (persistent):
 - `matches` collection — completed match records
 - `players` collection — per-player win/loss stats
+
+### Rendering Pipeline
+
+Render order: arena → bullets → tanks → particles → HUD → overlays. This matters when adding visual features that need to layer correctly.
+
+## Testing
+
+- Vitest with `happy-dom` environment, globals enabled (no manual `describe`/`it`/`expect` imports needed)
+- Setup file at `src/test/setup.ts` (imports `@testing-library/jest-dom`)
+- Component tests use `@testing-library/react` + `@testing-library/user-event`
+- Canvas rendering tests mock `CanvasRenderingContext2D` with `vi.fn()` stubs
+- Firebase modules mocked in component tests via `vi.mock()`
+- Test files colocated with source (e.g., `TankRenderer.test.ts` next to `TankRenderer.ts`)
 
 ## Firebase Gotchas
 

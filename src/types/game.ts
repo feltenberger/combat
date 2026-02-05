@@ -26,6 +26,7 @@ export interface PlayerInput {
   down: boolean;
   fire: boolean;
   timestamp: number;
+  targetAngle?: number; // Touch/joystick: desired facing direction (radians)
 }
 
 export interface Particle {

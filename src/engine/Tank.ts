@@ -22,25 +22,43 @@ export class Tank {
   update(input: PlayerInput, dt: number, arena: Arena): void {
     if (!this.alive) return;
 
-    // Rotation
-    if (input.left) this.angle -= TANK_ROTATION_SPEED * dt;
-    if (input.right) this.angle += TANK_ROTATION_SPEED * dt;
+    let dx = 0;
+    let dy = 0;
+
+    if (input.targetAngle !== undefined) {
+      // Touch/joystick: rotate toward target angle and move forward
+      const TOUCH_ROTATION_MULT = 3;
+      let angleDiff = input.targetAngle - this.angle;
+      while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+      while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+      const maxRotation = TANK_ROTATION_SPEED * TOUCH_ROTATION_MULT * dt;
+      if (Math.abs(angleDiff) <= maxRotation) {
+        this.angle = input.targetAngle;
+      } else {
+        this.angle += Math.sign(angleDiff) * maxRotation;
+      }
+
+      dx = Math.cos(this.angle) * TANK_SPEED * dt;
+      dy = Math.sin(this.angle) * TANK_SPEED * dt;
+    } else {
+      // Keyboard: standard rotation + forward/backward
+      if (input.left) this.angle -= TANK_ROTATION_SPEED * dt;
+      if (input.right) this.angle += TANK_ROTATION_SPEED * dt;
+
+      if (input.up) {
+        dx = Math.cos(this.angle) * TANK_SPEED * dt;
+        dy = Math.sin(this.angle) * TANK_SPEED * dt;
+      }
+      if (input.down) {
+        dx = -Math.cos(this.angle) * TANK_SPEED * dt * 0.6; // Slower reverse
+        dy = -Math.sin(this.angle) * TANK_SPEED * dt * 0.6;
+      }
+    }
 
     // Normalize angle
     while (this.angle > Math.PI) this.angle -= 2 * Math.PI;
     while (this.angle < -Math.PI) this.angle += 2 * Math.PI;
-
-    // Movement
-    let dx = 0;
-    let dy = 0;
-    if (input.up) {
-      dx = Math.cos(this.angle) * TANK_SPEED * dt;
-      dy = Math.sin(this.angle) * TANK_SPEED * dt;
-    }
-    if (input.down) {
-      dx = -Math.cos(this.angle) * TANK_SPEED * dt * 0.6; // Slower reverse
-      dy = -Math.sin(this.angle) * TANK_SPEED * dt * 0.6;
-    }
 
     // Try to move, with wall sliding
     if (dx !== 0 || dy !== 0) {
