@@ -23,6 +23,7 @@ export class GameSyncService {
       down: input.down,
       fire: input.fire,
       timestamp: input.timestamp,
+      ...(input.targetAngle !== undefined && { targetAngle: input.targetAngle }),
     });
   }
 
