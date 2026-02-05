@@ -1,4 +1,4 @@
-import { CANVAS_WIDTH, COLORS } from '../config/constants';
+import { CANVAS_WIDTH, COLORS, TankColor, TANK_COLORS } from '../config/constants';
 
 export class HUDRenderer {
   render(
@@ -8,7 +8,9 @@ export class HUDRenderer {
     p1Score: number,
     p2Score: number,
     round: number,
-    roundsToWin: number
+    roundsToWin: number,
+    p1Color: TankColor = 'blue',
+    p2Color: TankColor = 'red',
   ): void {
     const hudHeight = 36;
     const y = 0;
@@ -26,7 +28,7 @@ export class HUDRenderer {
     const cy = y + hudHeight / 2;
 
     // Player 1 (left)
-    ctx.fillStyle = COLORS.PLAYER1;
+    ctx.fillStyle = TANK_COLORS[p1Color].main;
     ctx.textAlign = 'left';
     ctx.fillText(`${p1Name}`, 12, cy);
 
@@ -50,7 +52,7 @@ export class HUDRenderer {
     ctx.fillText(`${p2Score}`, CANVAS_WIDTH - 12 - p2NameWidth - 12, cy);
 
     // Player 2 name
-    ctx.fillStyle = COLORS.PLAYER2;
+    ctx.fillStyle = TANK_COLORS[p2Color].main;
     ctx.fillText(`${p2Name}`, CANVAS_WIDTH - 12, cy);
   }
 

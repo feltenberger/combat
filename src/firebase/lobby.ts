@@ -1,6 +1,7 @@
 import { ref, set, onValue, off, remove, push } from 'firebase/database';
 import { rtdb } from '../config/firebase';
 import { ChallengeData } from '../types/firebase';
+import { TankColor } from '../config/constants';
 
 export function sendChallenge(
   fromUid: string,
@@ -8,6 +9,7 @@ export function sendChallenge(
   toUid: string,
   toName: string,
   arenaIndex: number = 0,
+  fromColor: TankColor = 'blue',
 ): string {
   const challengeRef = ref(rtdb, `challenges/${toUid}`);
   const challenge: ChallengeData = {
@@ -17,6 +19,7 @@ export function sendChallenge(
     toName,
     status: 'pending',
     arenaIndex,
+    fromColor,
     timestamp: Date.now(),
   };
   set(challengeRef, challenge);
@@ -34,7 +37,11 @@ export function listenToChallenge(
   return () => off(challengeRef);
 }
 
-export async function acceptChallenge(uid: string, challenge: ChallengeData): Promise<string> {
+export async function acceptChallenge(
+  uid: string,
+  challenge: ChallengeData,
+  guestColor: TankColor = 'blue',
+): Promise<string> {
   const gameId = `game_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
   // Create game room — write config and status separately so each
@@ -47,6 +54,8 @@ export async function acceptChallenge(uid: string, challenge: ChallengeData): Pr
     guestUid: challenge.to,
     hostName: challenge.fromName,
     guestName: challenge.toName,
+    hostColor: challenge.fromColor || 'blue',
+    guestColor,
     createdAt: Date.now(),
   });
 

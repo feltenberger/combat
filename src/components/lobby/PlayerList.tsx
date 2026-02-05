@@ -1,8 +1,10 @@
 import React from 'react';
+import { TankColor, TANK_COLORS } from '../../config/constants';
 
 interface Player {
   uid: string;
   name: string;
+  color: TankColor;
 }
 
 interface PlayerListProps {
@@ -28,7 +30,10 @@ export function PlayerList({ players, onChallenge, challengingUid }: PlayerListP
         {players.map((p) => (
           <li key={p.uid}>
             <span className="player-name">
-              <span className="online-dot" />
+              <span
+                className="online-dot"
+                style={{ backgroundColor: TANK_COLORS[p.color]?.main || '#44dd44' }}
+              />
               {p.name}
             </span>
             <button

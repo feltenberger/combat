@@ -65,6 +65,8 @@ export interface GameState {
   timestamp: number;
 }
 
+import { TankColor } from '../config/constants';
+
 export interface GameConfig {
   arenaIndex: number;
   roundsToWin: number;
@@ -72,4 +74,6 @@ export interface GameConfig {
   guestUid: string;
   hostName: string;
   guestName: string;
+  hostColor: TankColor;
+  guestColor: TankColor;
 }

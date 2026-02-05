@@ -5,7 +5,7 @@ import { TankRenderer } from './TankRenderer';
 import { BulletRenderer } from './BulletRenderer';
 import { ParticleRenderer } from './ParticleRenderer';
 import { HUDRenderer } from './HUDRenderer';
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from '../config/constants';
+import { CANVAS_WIDTH, CANVAS_HEIGHT, TankColor } from '../config/constants';
 
 export class Renderer {
   private arenaRenderer = new ArenaRenderer();
@@ -20,6 +20,7 @@ export class Renderer {
     playerOrder: string[],
     playerNames: Record<string, string>,
     disconnected: boolean = false,
+    playerColors: Record<string, TankColor> = {},
   ): void {
     // Clear
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -39,7 +40,8 @@ export class Renderer {
       const uid = playerOrder[i];
       const tank = engine.tanks.get(uid);
       if (tank) {
-        this.tankRenderer.render(ctx, tank.getState(), i);
+        const color = playerColors[uid] || (i === 0 ? 'blue' : 'red');
+        this.tankRenderer.render(ctx, tank.getState(), color);
       }
     }
 
@@ -49,6 +51,8 @@ export class Renderer {
     // HUD
     const p1 = playerOrder[0] || '';
     const p2 = playerOrder[1] || '';
+    const p1Color = playerColors[p1] || 'blue';
+    const p2Color = playerColors[p2] || 'red';
     this.hudRenderer.render(
       ctx,
       playerNames[p1] || 'Player 1',
@@ -57,6 +61,8 @@ export class Renderer {
       engine.scores.get(p2) || 0,
       engine.round,
       engine.roundsToWin,
+      p1Color,
+      p2Color,
     );
 
     // Overlays based on phase

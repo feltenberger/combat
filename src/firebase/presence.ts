@@ -1,8 +1,9 @@
 import { ref, set, onDisconnect, onValue, serverTimestamp, off } from 'firebase/database';
 import { rtdb } from '../config/firebase';
 import { PresenceData } from '../types/firebase';
+import { TankColor } from '../config/constants';
 
-export function setupPresence(uid: string, name: string): () => void {
+export function setupPresence(uid: string, name: string, color: TankColor = 'blue'): () => void {
   const presenceRef = ref(rtdb, `presence/${uid}`);
   const connectedRef = ref(rtdb, '.info/connected');
 
@@ -10,6 +11,7 @@ export function setupPresence(uid: string, name: string): () => void {
     name,
     online: true,
     lastSeen: Date.now(),
+    color,
   };
 
   const handleConnected = onValue(connectedRef, (snap) => {

@@ -11,7 +11,7 @@ import { saveMatchResult } from '../../firebase/matchHistory';
 import { useGameLoop } from '../../hooks/useGameLoop';
 import { PlayerInput, GameState } from '../../types/game';
 import { GameRoom } from '../../types/firebase';
-import { STATE_BROADCAST_INTERVAL, ROUNDS_TO_WIN } from '../../config/constants';
+import { STATE_BROADCAST_INTERVAL, ROUNDS_TO_WIN, TankColor } from '../../config/constants';
 import { lerpAngle, lerp } from '../../utils/math';
 
 interface GamePageProps {
@@ -37,6 +37,7 @@ export function GamePage({ uid }: GamePageProps) {
   const lastBroadcastRef = useRef(0);
   const playerOrderRef = useRef<string[]>([]);
   const playerNamesRef = useRef<Record<string, string>>({});
+  const playerColorsRef = useRef<Record<string, TankColor>>({});
   const matchResultSavedRef = useRef(false);
 
   // For guest interpolation
@@ -69,6 +70,10 @@ export function GamePage({ uid }: GamePageProps) {
       playerNamesRef.current = {
         [cfg.hostUid]: cfg.hostName,
         [cfg.guestUid]: cfg.guestName,
+      };
+      playerColorsRef.current = {
+        [cfg.hostUid]: cfg.hostColor || 'blue',
+        [cfg.guestUid]: cfg.guestColor || 'red',
       };
 
       // Initialize engine
@@ -247,6 +252,7 @@ export function GamePage({ uid }: GamePageProps) {
       playerOrderRef.current,
       playerNamesRef.current,
       disconnected,
+      playerColorsRef.current,
     );
   }, !!config);
 

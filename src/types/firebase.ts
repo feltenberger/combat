@@ -1,7 +1,10 @@
+import { TankColor } from '../config/constants';
+
 export interface PresenceData {
   name: string;
   online: boolean;
   lastSeen: number;
+  color?: TankColor;
 }
 
 export interface ChallengeData {
@@ -12,6 +15,7 @@ export interface ChallengeData {
   status: 'pending' | 'accepted' | 'rejected';
   gameId?: string;
   arenaIndex: number;
+  fromColor?: TankColor;
   timestamp: number;
 }
 
@@ -23,6 +27,8 @@ export interface GameRoom {
     guestUid: string;
     hostName: string;
     guestName: string;
+    hostColor: TankColor;
+    guestColor: TankColor;
     createdAt: number;
   };
   state?: Record<string, unknown>;

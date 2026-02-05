@@ -29,6 +29,16 @@ export const ROUNDS_TO_WIN = 2;
 export const COUNTDOWN_DURATION = 3; // seconds
 export const ROUND_OVER_DELAY = 2; // seconds before next round
 
+// Tank Colors
+export type TankColor = 'blue' | 'red' | 'green' | 'camo';
+
+export const TANK_COLORS: Record<TankColor, { main: string; dark: string }> = {
+  blue: { main: '#4a90d9', dark: '#2d5a8a' },
+  red: { main: '#d94a4a', dark: '#8a2d2d' },
+  green: { main: '#44aa44', dark: '#2d7a2d' },
+  camo: { main: '#4a5a2f', dark: '#6b4f2a' },
+};
+
 // Colors
 export const COLORS = {
   PLAYER1: '#4a90d9',

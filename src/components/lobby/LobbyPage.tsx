@@ -4,9 +4,11 @@ import { NameEntry } from './NameEntry';
 import { PlayerList } from './PlayerList';
 import { ChallengeModal } from './ChallengeModal';
 import { IncomingChallenge } from './IncomingChallenge';
+import { ColorPicker } from './ColorPicker';
 import { useFirebasePresence } from '../../hooks/useFirebasePresence';
 import { sendChallenge, listenToChallenge, acceptChallenge, rejectChallenge, clearChallenge } from '../../firebase/lobby';
 import { ChallengeData } from '../../types/firebase';
+import { TankColor } from '../../config/constants';
 import { ARENAS } from '../../engine/Arena';
 
 interface LobbyPageProps {
@@ -16,6 +18,9 @@ interface LobbyPageProps {
 export function LobbyPage({ uid }: LobbyPageProps) {
   const [name, setName] = useState(localStorage.getItem('combat-name') || '');
   const [hasEnteredName, setHasEnteredName] = useState(!!name);
+  const [color, setColor] = useState<TankColor>(
+    (localStorage.getItem('combat-color') as TankColor) || 'blue'
+  );
   const [challengingUid, setChallengingUid] = useState<string | null>(null);
   const [challengingName, setChallengingName] = useState('');
   const [incomingChallenge, setIncomingChallenge] = useState<ChallengeData | null>(null);
@@ -24,7 +29,8 @@ export function LobbyPage({ uid }: LobbyPageProps) {
   const navigate = useNavigate();
   const { onlinePlayers } = useFirebasePresence(
     hasEnteredName ? uid : null,
-    name
+    name,
+    color
   );
 
   // Listen for incoming challenges
@@ -47,16 +53,26 @@ export function LobbyPage({ uid }: LobbyPageProps) {
     return unsub;
   }, [uid, hasEnteredName, navigate]);
 
-  const handleNameSubmit = (n: string) => {
+  const handleNameSubmit = (n: string, c: TankColor) => {
     setName(n);
+    setColor(c);
     setHasEnteredName(true);
+  };
+
+  const handleEditName = () => {
+    setHasEnteredName(false);
+  };
+
+  const handleColorChange = (c: TankColor) => {
+    setColor(c);
+    localStorage.setItem('combat-color', c);
   };
 
   const handleChallenge = useCallback((targetUid: string, targetName: string) => {
     if (!uid || !name) return;
     setChallengingUid(targetUid);
     setChallengingName(targetName);
-    sendChallenge(uid, name, targetUid, targetName, selectedArena);
+    sendChallenge(uid, name, targetUid, targetName, selectedArena, color);
 
     // Listen for response on the target's challenge node
     const unsub = listenToChallenge(targetUid, (challenge) => {
@@ -73,7 +89,7 @@ export function LobbyPage({ uid }: LobbyPageProps) {
         navigate(`/game/${challenge.gameId}`);
       }
     });
-  }, [uid, name, selectedArena, navigate]);
+  }, [uid, name, selectedArena, color, navigate]);
 
   const handleCancelChallenge = () => {
     if (challengingUid) {
@@ -83,9 +99,10 @@ export function LobbyPage({ uid }: LobbyPageProps) {
     setChallengingName('');
   };
 
-  const handleAcceptChallenge = async () => {
+  const handleAcceptChallenge = async (resolvedColor?: TankColor) => {
     if (!uid || !incomingChallenge) return;
-    const gameId = await acceptChallenge(uid, incomingChallenge);
+    const finalColor = resolvedColor || color;
+    const gameId = await acceptChallenge(uid, incomingChallenge, finalColor);
     setIncomingChallenge(null);
     navigate(`/game/${gameId}`);
   };
@@ -97,7 +114,7 @@ export function LobbyPage({ uid }: LobbyPageProps) {
   };
 
   if (!hasEnteredName) {
-    return <NameEntry onSubmit={handleNameSubmit} />;
+    return <NameEntry onSubmit={handleNameSubmit} initialColor={color} />;
   }
 
   return (
@@ -106,6 +123,9 @@ export function LobbyPage({ uid }: LobbyPageProps) {
         <h1>COMBAT</h1>
         <div className="header-actions">
           <span className="user-name">Playing as: <strong>{name}</strong></span>
+          <button onClick={handleEditName} className="secondary small">
+            Edit
+          </button>
           <button onClick={() => navigate('/scoreboard')} className="secondary small">
             Scoreboard
           </button>
@@ -128,6 +148,11 @@ export function LobbyPage({ uid }: LobbyPageProps) {
           </div>
         </div>
 
+        <div className="color-select">
+          <h3>Tank Color</h3>
+          <ColorPicker selected={color} onChange={handleColorChange} />
+        </div>
+
         <PlayerList
           players={onlinePlayers}
           onChallenge={handleChallenge}
@@ -144,7 +169,8 @@ export function LobbyPage({ uid }: LobbyPageProps) {
 
       {incomingChallenge && (
         <IncomingChallenge
-          fromName={incomingChallenge.fromName}
+          challenge={incomingChallenge}
+          myColor={color}
           onAccept={handleAcceptChallenge}
           onReject={handleRejectChallenge}
         />

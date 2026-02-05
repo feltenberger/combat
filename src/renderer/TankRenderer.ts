@@ -1,19 +1,20 @@
 import { TankState } from '../types/game';
-import { TANK_RADIUS, COLORS } from '../config/constants';
+import { TANK_RADIUS, TANK_COLORS, TankColor } from '../config/constants';
 
 export class TankRenderer {
-  render(ctx: CanvasRenderingContext2D, tank: TankState, playerIndex: number): void {
+  render(ctx: CanvasRenderingContext2D, tank: TankState, color: TankColor): void {
     if (!tank.alive) return;
 
-    const color = playerIndex === 0 ? COLORS.PLAYER1 : COLORS.PLAYER2;
-    const darkColor = playerIndex === 0 ? COLORS.PLAYER1_DARK : COLORS.PLAYER2_DARK;
+    const colors = TANK_COLORS[color];
+    const mainColor = colors.main;
+    const darkColor = colors.dark;
 
     ctx.save();
     ctx.translate(tank.x, tank.y);
     ctx.rotate(tank.angle);
 
     // Tank body (rounded rectangle-ish)
-    ctx.fillStyle = color;
+    ctx.fillStyle = mainColor;
     ctx.beginPath();
     const bw = TANK_RADIUS * 1.6;
     const bh = TANK_RADIUS * 1.2;
@@ -61,9 +62,9 @@ export class TankRenderer {
     ctx.restore();
   }
 
-  renderGhost(ctx: CanvasRenderingContext2D, tank: TankState, playerIndex: number): void {
+  renderGhost(ctx: CanvasRenderingContext2D, tank: TankState, color: TankColor): void {
     ctx.globalAlpha = 0.3;
-    this.render(ctx, tank, playerIndex);
+    this.render(ctx, tank, color);
     ctx.globalAlpha = 1;
   }
 }
