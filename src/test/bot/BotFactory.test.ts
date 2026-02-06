@@ -48,6 +48,19 @@ describe('BotFactory', () => {
     it('returns cpu-bot-hard for hard', () => {
       expect(getCpuUid('hard')).toBe('cpu-bot-hard');
     });
+
+    it('returns indexed UID when index > 0', () => {
+      expect(getCpuUid('easy', 1)).toBe('cpu-bot-easy-1');
+      expect(getCpuUid('hard', 2)).toBe('cpu-bot-hard-2');
+    });
+
+    it('returns base UID when index is 0', () => {
+      expect(getCpuUid('easy', 0)).toBe('cpu-bot-easy');
+    });
+
+    it('returns base UID when index is undefined', () => {
+      expect(getCpuUid('offensive')).toBe('cpu-bot-offensive');
+    });
   });
 
   describe('isCpuUid', () => {

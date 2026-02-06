@@ -19,7 +19,10 @@ export function createBot(difficulty: BotDifficulty): BotBrain {
   }
 }
 
-export function getCpuUid(difficulty: BotDifficulty): string {
+export function getCpuUid(difficulty: BotDifficulty, index?: number): string {
+  if (index !== undefined && index > 0) {
+    return `${CPU_BOT_UID_PREFIX}${difficulty}-${index}`;
+  }
   return `${CPU_BOT_UID_PREFIX}${difficulty}`;
 }
 

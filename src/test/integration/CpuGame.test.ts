@@ -47,6 +47,7 @@ function runCpuGame(difficulty: BotDifficulty, maxSeconds: number = 300): {
     const botInput = bot.update({
       myUid: cpuUid,
       opponentUid: hostUid,
+      allOpponentUids: [hostUid],
       gameState: engine.getState(),
       arena: engine.arena,
       dt,

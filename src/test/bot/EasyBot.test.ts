@@ -24,6 +24,7 @@ function makeContext(overrides?: Partial<BotContext>): BotContext {
   return {
     myUid: 'cpu-bot-easy',
     opponentUid: 'player1',
+    allOpponentUids: ['player1'],
     gameState: state,
     arena: new Arena(0),
     dt: 1 / 60,

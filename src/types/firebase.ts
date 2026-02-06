@@ -1,4 +1,5 @@
 import { TankColor } from '../config/constants';
+import { BotDifficulty, CpuPlayerConfig } from './game';
 
 export interface PresenceData {
   name: string;
@@ -18,6 +19,8 @@ export interface ChallengeData {
   fromColor?: TankColor;
   fireRate?: number;
   roundsToWin?: number;
+  livesPerRound?: number;
+  cpuPlayers?: CpuPlayerConfig[];
   timestamp: number;
 }
 
@@ -34,13 +37,13 @@ export interface GameRoom {
     createdAt: number;
     cpuDifficulty?: BotDifficulty;
     fireRate?: number;
+    cpuPlayers?: CpuPlayerConfig[];
+    livesPerRound?: number;
   };
   state?: Record<string, unknown>;
   input?: Record<string, Record<string, unknown>>;
   status: 'waiting' | 'active' | 'finished';
 }
-
-import { BotDifficulty } from './game';
 
 export interface MatchRecord {
   gameId: string;
@@ -56,6 +59,9 @@ export interface MatchRecord {
   arenaIndex: number;
   completedAt: number;
   cpuDifficulty?: BotDifficulty;
+  players?: Array<{ uid: string; name: string; score: number; color?: TankColor; isCpu?: boolean }>;
+  livesPerRound?: number;
+  playerCount?: number;
 }
 
 export interface PlayerStats {

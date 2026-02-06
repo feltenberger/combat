@@ -1,4 +1,4 @@
-import { PlayerInput, BulletState, TankState } from '../types/game';
+import { PlayerInput, BulletState, TankState, GameState } from '../types/game';
 import { Arena } from '../engine/Arena';
 import { TILE_SIZE, ARENA_COLS, ARENA_ROWS, BULLET_SPEED } from '../config/constants';
 
@@ -310,4 +310,32 @@ export function distanceBetween(x1: number, y1: number, x2: number, y2: number):
   const dx = x2 - x1;
   const dy = y2 - y1;
   return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
+ * Find the nearest alive (non-eliminated) opponent from a list of UIDs.
+ * Returns null if no alive opponents found.
+ */
+export function findNearestAliveOpponent(
+  myUid: string,
+  opponentUids: string[],
+  gameState: GameState,
+): string | null {
+  const myTank = gameState.tanks[myUid];
+  if (!myTank) return opponentUids[0] || null;
+
+  let nearest: string | null = null;
+  let nearestDist = Infinity;
+
+  for (const uid of opponentUids) {
+    const tank = gameState.tanks[uid];
+    if (!tank || !tank.alive || tank.eliminated) continue;
+    const dist = distanceBetween(myTank.x, myTank.y, tank.x, tank.y);
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearest = uid;
+    }
+  }
+
+  return nearest;
 }

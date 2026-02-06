@@ -5,4 +5,6 @@ export interface ArenaDefinition {
   tiles: TileType[][];   // [row][col]
   spawn1: { col: number; row: number };
   spawn2: { col: number; row: number };
+  spawn3: { col: number; row: number };
+  spawn4: { col: number; row: number };
 }

@@ -107,6 +107,13 @@ export const MUSIC_MELODY_VOLUME = 0.18;
 export const MUSIC_BASS_VOLUME = 0.15;
 export const MUSIC_DRUM_VOLUME = 0.10;
 
+// Lives System
+export const DEFAULT_LIVES_PER_ROUND = 1;
+export const LIVES_OPTIONS = [1, 2, 3, 5];
+export const RESPAWN_INVINCIBILITY_DURATION = 2.0; // seconds
+export const RESPAWN_BLINK_RATE = 8; // Hz
+export const MAX_CPU_OPPONENTS = 2;
+
 // Tile Types
 export enum TileType {
   FLOOR = 0,
@@ -114,4 +121,6 @@ export enum TileType {
   ROCK = 2,
   SPAWN_1 = 3,
   SPAWN_2 = 4,
+  SPAWN_3 = 5,
+  SPAWN_4 = 6,
 }

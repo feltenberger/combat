@@ -5,16 +5,18 @@ import { PlayerList } from './PlayerList';
 import { Player } from './PlayerList';
 import { CpuPlayButton } from './CpuPlayButton';
 import { ChallengeModal } from './ChallengeModal';
+import { ChallengeSetupModal } from './ChallengeSetupModal';
 import { IncomingChallenge } from './IncomingChallenge';
 import { ColorPicker } from './ColorPicker';
 import { FireRateSlider } from './FireRateSlider';
 import { RoundsToWinSelector } from './RoundsToWinSelector';
+import { LivesSelector } from './LivesSelector';
 import { useFirebasePresence } from '../../hooks/useFirebasePresence';
 import { sendChallenge, listenToChallenge, acceptChallenge, rejectChallenge, clearChallenge } from '../../firebase/lobby';
 import { buildCpuGameConfig } from '../../firebase/cpuGame';
 import { ChallengeData } from '../../types/firebase';
-import { BotDifficulty } from '../../types/game';
-import { TankColor, DEFAULT_FIRE_RATE, ROUNDS_TO_WIN } from '../../config/constants';
+import { BotDifficulty, CpuPlayerConfig } from '../../types/game';
+import { TankColor, DEFAULT_FIRE_RATE, ROUNDS_TO_WIN, DEFAULT_LIVES_PER_ROUND } from '../../config/constants';
 import { ARENAS } from '../../engine/Arena';
 import { getCpuUid, isCpuUid } from '../../bot/BotFactory';
 import { CPU_DEFAULT_COLORS, CPU_DIFFICULTY_NAMES } from '../../bot/cpuConstants';
@@ -32,6 +34,7 @@ export function LobbyPage({ uid }: LobbyPageProps) {
   );
   const [challengingUid, setChallengingUid] = useState<string | null>(null);
   const [challengingName, setChallengingName] = useState('');
+  const [setupTarget, setSetupTarget] = useState<{ uid: string; name: string } | null>(null);
   const [incomingChallenge, setIncomingChallenge] = useState<ChallengeData | null>(null);
   const [selectedArena, setSelectedArena] = useState(() => {
     const saved = localStorage.getItem('combat-arena');
@@ -44,6 +47,10 @@ export function LobbyPage({ uid }: LobbyPageProps) {
   const [roundsToWin, setRoundsToWin] = useState(() => {
     const saved = localStorage.getItem('combat-rounds-to-win');
     return saved !== null ? Number(saved) : ROUNDS_TO_WIN;
+  });
+  const [livesPerRound, setLivesPerRound] = useState(() => {
+    const saved = localStorage.getItem('combat-lives-per-round');
+    return saved !== null ? Number(saved) : DEFAULT_LIVES_PER_ROUND;
   });
 
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -142,6 +149,11 @@ export function LobbyPage({ uid }: LobbyPageProps) {
     localStorage.setItem('combat-rounds-to-win', String(v));
   };
 
+  const handleLivesPerRoundChange = (v: number) => {
+    setLivesPerRound(v);
+    localStorage.setItem('combat-lives-per-round', String(v));
+  };
+
   const handleSfxVolumeChange = (v: number) => {
     setSfxVolume(v);
     saveSoundPref('sfxVolume', v);
@@ -170,11 +182,11 @@ export function LobbyPage({ uid }: LobbyPageProps) {
     }));
   }, []);
 
-  const handleStartCpuGame = useCallback((difficulty: BotDifficulty) => {
+  const handleStartCpuGame = useCallback((difficulties: BotDifficulty[]) => {
     if (!uid || !name) return;
-    const { gameId, config: cpuConfig } = buildCpuGameConfig(uid, name, color, difficulty, selectedArena, fireRate, roundsToWin);
+    const { gameId, config: cpuConfig } = buildCpuGameConfig(uid, name, color, difficulties, selectedArena, fireRate, roundsToWin, livesPerRound);
     navigate(`/game/${gameId}`, { state: { cpuConfig } });
-  }, [uid, name, color, selectedArena, fireRate, roundsToWin, navigate]);
+  }, [uid, name, color, selectedArena, fireRate, roundsToWin, livesPerRound, navigate]);
 
   const handleChallenge = useCallback((targetUid: string, targetName: string) => {
     if (!uid || !name) return;
@@ -182,13 +194,22 @@ export function LobbyPage({ uid }: LobbyPageProps) {
     // If challenging a CPU, create game directly
     if (isCpuUid(targetUid)) {
       const difficulty = targetUid.replace('cpu-bot-', '') as BotDifficulty;
-      handleStartCpuGame(difficulty);
+      handleStartCpuGame([difficulty]);
       return;
     }
 
+    // Show setup modal for human players
+    setSetupTarget({ uid: targetUid, name: targetName });
+  }, [uid, name, handleStartCpuGame]);
+
+  const handleSetupConfirm = useCallback((cpuPlayers?: CpuPlayerConfig[]) => {
+    if (!uid || !name || !setupTarget) return;
+
+    const { uid: targetUid, name: targetName } = setupTarget;
+    setSetupTarget(null);
     setChallengingUid(targetUid);
     setChallengingName(targetName);
-    sendChallenge(uid, name, targetUid, targetName, selectedArena, color, fireRate, roundsToWin);
+    sendChallenge(uid, name, targetUid, targetName, selectedArena, color, fireRate, roundsToWin, livesPerRound, cpuPlayers);
 
     // Listen for response on the target's challenge node
     const unsub = listenToChallenge(targetUid, (challenge) => {
@@ -205,7 +226,11 @@ export function LobbyPage({ uid }: LobbyPageProps) {
         navigate(`/game/${challenge.gameId}`);
       }
     });
-  }, [uid, name, selectedArena, color, fireRate, roundsToWin, navigate, handleStartCpuGame]);
+  }, [uid, name, setupTarget, selectedArena, color, fireRate, roundsToWin, livesPerRound, navigate]);
+
+  const handleSetupCancel = useCallback(() => {
+    setSetupTarget(null);
+  }, []);
 
   const handleCancelChallenge = () => {
     if (challengingUid) {
@@ -297,6 +322,11 @@ export function LobbyPage({ uid }: LobbyPageProps) {
                 <RoundsToWinSelector value={roundsToWin} onChange={handleRoundsToWinChange} />
               </div>
 
+              <div className="lives-select">
+                <h3>Lives per Round</h3>
+                <LivesSelector value={livesPerRound} onChange={handleLivesPerRoundChange} />
+              </div>
+
               <div className="volume-select">
                 <h3>Sound Effects</h3>
                 <div className="volume-row">
@@ -346,6 +376,15 @@ export function LobbyPage({ uid }: LobbyPageProps) {
           )}
         </div>
       </div>
+
+      {setupTarget && (
+        <ChallengeSetupModal
+          targetName={setupTarget.name}
+          hostColor={color}
+          onConfirm={handleSetupConfirm}
+          onCancel={handleSetupCancel}
+        />
+      )}
 
       {challengingUid && (
         <ChallengeModal

@@ -37,6 +37,20 @@ describe('Collision', () => {
       tank.kill();
       expect(checkBulletTankCollision(bullet, tank)).toBe(false);
     });
+
+    it('returns false when tank is invincible', () => {
+      const bullet = new Bullet('b1', 100, 100, 0, 'p1', 0);
+      const tank = new Tank('p2', 100 + TANK_RADIUS, 100, Math.PI);
+      tank.invincibilityTimer = 1.0; // invincible
+      expect(checkBulletTankCollision(bullet, tank)).toBe(false);
+    });
+
+    it('returns true when invincibility has expired', () => {
+      const bullet = new Bullet('b1', 100, 100, 0, 'p1', 0);
+      const tank = new Tank('p2', 100 + TANK_RADIUS, 100, Math.PI);
+      tank.invincibilityTimer = 0; // not invincible
+      expect(checkBulletTankCollision(bullet, tank)).toBe(true);
+    });
   });
 
   describe('checkTankTankCollision', () => {

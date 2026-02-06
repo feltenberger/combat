@@ -13,6 +13,8 @@ import {
   TILE_SIZE,
   FIRE_RATE_PRESETS,
   DEFAULT_FIRE_RATE,
+  DEFAULT_LIVES_PER_ROUND,
+  RESPAWN_INVINCIBILITY_DURATION,
 } from '../config/constants';
 
 export class GameEngine {
@@ -27,20 +29,22 @@ export class GameEngine {
   round: number = 1;
   countdown: number = COUNTDOWN_DURATION;
   roundOverTimer: number = 0;
-  roundResult: { winner: string | null; loser: string | null } | null = null;
+  roundResult: { winner: string | null; loser: string | null; eliminations?: string[] } | null = null;
   matchWinner: string | null = null;
   roundsToWin: number = ROUNDS_TO_WIN;
+  livesPerRound: number = DEFAULT_LIVES_PER_ROUND;
 
   private accumulator: number = 0;
-  private gameTime: number = 0;
+  gameTime: number = 0;
   private playerOrder: string[] = [];
   private bulletIdCounter: number = 0;
   private bulletCooldownValue: number;
   private maxBulletsPerPlayer: number;
 
-  constructor(arenaIndex: number, roundsToWin: number = ROUNDS_TO_WIN, fireRate: number = DEFAULT_FIRE_RATE) {
+  constructor(arenaIndex: number, roundsToWin: number = ROUNDS_TO_WIN, fireRate: number = DEFAULT_FIRE_RATE, livesPerRound: number = DEFAULT_LIVES_PER_ROUND) {
     this.arena = new Arena(arenaIndex);
     this.roundsToWin = roundsToWin;
+    this.livesPerRound = livesPerRound;
     const preset = FIRE_RATE_PRESETS[fireRate] ?? FIRE_RATE_PRESETS[DEFAULT_FIRE_RATE];
     this.bulletCooldownValue = preset.cooldown;
     this.maxBulletsPerPlayer = preset.maxBullets;
@@ -51,6 +55,7 @@ export class GameEngine {
     this.playerOrder.push(uid);
     const spawn = this.arena.getSpawnPosition(index);
     const tank = new Tank(uid, spawn.x, spawn.y, spawn.angle);
+    tank.lives = this.livesPerRound;
     this.tanks.set(uid, tank);
     this.scores.set(uid, 0);
   }
@@ -72,7 +77,7 @@ export class GameEngine {
     this.playerOrder.forEach((uid, index) => {
       const spawn = this.arena.getSpawnPosition(index);
       const tank = this.tanks.get(uid)!;
-      tank.respawn(spawn.x, spawn.y, spawn.angle);
+      tank.respawnForNewRound(spawn.x, spawn.y, spawn.angle, this.livesPerRound);
     });
   }
 
@@ -132,8 +137,9 @@ export class GameEngine {
   }
 
   private updatePlaying(dt: number, inputs: Map<string, PlayerInput>): void {
-    // Update tanks
+    // Update tanks (skip eliminated)
     for (const [uid, tank] of this.tanks.entries()) {
+      if (tank.eliminated) continue;
       const input = inputs.get(uid) || {
         left: false, right: false, up: false, down: false, fire: false, timestamp: 0,
       };
@@ -185,8 +191,9 @@ export class GameEngine {
     }
 
     // Check bullet-tank collisions
+    let killHappened = false;
     for (const bullet of this.bullets) {
-      if (!bullet.alive) continue;
+      if (!bullet.alive || killHappened) continue;
       for (const [uid, tank] of this.tanks.entries()) {
         if (checkBulletTankCollision(bullet, tank)) {
           bullet.alive = false;
@@ -194,13 +201,53 @@ export class GameEngine {
           this.particles.spawnExplosion(tank.x, tank.y);
           this.sound?.playExplosion();
 
-          // Round over
-          const winner = bullet.ownerId;
-          const loser = uid;
-          this.scores.set(winner, (this.scores.get(winner) || 0) + 1);
-          this.roundResult = { winner, loser };
-          this.phase = 'ROUND_OVER';
-          this.roundOverTimer = ROUND_OVER_DELAY;
+          const shooter = bullet.ownerId;
+          const eliminated = tank.loseLife();
+
+          if (!eliminated) {
+            // Respawn with invincibility
+            const playerIndex = this.playerOrder.indexOf(uid);
+            const spawn = this.arena.getSpawnPosition(playerIndex);
+            tank.respawn(spawn.x, spawn.y, spawn.angle);
+            tank.invincibilityTimer = RESPAWN_INVINCIBILITY_DURATION;
+          }
+
+          // Count alive (non-eliminated) players
+          const alivePlayers = this.playerOrder.filter(pUid => {
+            const t = this.tanks.get(pUid);
+            return t && !t.eliminated;
+          });
+
+          if (alivePlayers.length <= 1) {
+            // Round over — last man standing wins
+            const winner = alivePlayers[0] || null;
+            const eliminatedUids = this.playerOrder.filter(pUid => {
+              const t = this.tanks.get(pUid);
+              return t && t.eliminated;
+            });
+
+            if (winner) {
+              this.scores.set(winner, (this.scores.get(winner) || 0) + 1);
+            }
+
+            // For backward compat, set loser to the last eliminated player (uid)
+            // In 2-player mode this matches old behavior exactly
+            this.roundResult = {
+              winner,
+              loser: uid,
+              eliminations: eliminatedUids,
+            };
+            this.phase = 'ROUND_OVER';
+            this.roundOverTimer = ROUND_OVER_DELAY;
+            killHappened = true;
+            break;
+          } else {
+            // In multi-lives mode, award a point to the shooter for each kill
+            // only if round isn't over (don't double-count the final kill)
+            // Actually - points only on round win, not per kill, to keep scoring simple
+          }
+
+          killHappened = true;
           break;
         }
       }
@@ -221,6 +268,11 @@ export class GameEngine {
       scores[uid] = score;
     }
 
+    const lives: Record<string, number> = {};
+    for (const [uid, tank] of this.tanks.entries()) {
+      lives[uid] = tank.lives;
+    }
+
     return {
       phase: this.phase,
       tanks,
@@ -232,6 +284,7 @@ export class GameEngine {
       roundResult: this.roundResult,
       matchWinner: this.matchWinner,
       timestamp: Date.now(),
+      lives,
     };
   }
 
@@ -273,6 +326,14 @@ export class GameEngine {
     // Update rock HP
     if (state.rockHP) {
       this.arena.setRockHPFromMap(state.rockHP);
+    }
+
+    // Update lives
+    if (state.lives) {
+      for (const [uid, livesCount] of Object.entries(state.lives)) {
+        const tank = this.tanks.get(uid);
+        if (tank) tank.lives = livesCount;
+      }
     }
   }
 }

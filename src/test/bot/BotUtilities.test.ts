@@ -3,8 +3,9 @@ import {
   angleTo, angleDiff, isAimingAt, hasLineOfSight,
   getBulletThreat, getDodgeDirection, angleToInput,
   findCoverPositions, findPath, getLeadingAngle,
-  noInput, distanceBetween,
+  noInput, distanceBetween, findNearestAliveOpponent,
 } from '../../bot/BotUtilities';
+import { GameState } from '../../types/game';
 import { Arena } from '../../engine/Arena';
 
 describe('BotUtilities', () => {
@@ -247,6 +248,75 @@ describe('BotUtilities', () => {
 
     it('returns 0 for same point', () => {
       expect(distanceBetween(5, 5, 5, 5)).toBe(0);
+    });
+  });
+
+  describe('findNearestAliveOpponent', () => {
+    function makeState(tanks: Record<string, { x: number; y: number; alive: boolean; eliminated?: boolean }>): GameState {
+      const tankStates: Record<string, any> = {};
+      for (const [uid, t] of Object.entries(tanks)) {
+        tankStates[uid] = { x: t.x, y: t.y, angle: 0, alive: t.alive, eliminated: t.eliminated ?? false };
+      }
+      return {
+        phase: 'PLAYING',
+        tanks: tankStates,
+        bullets: [],
+        rockHP: {},
+        scores: {},
+        round: 1,
+        countdown: 0,
+        roundResult: null,
+        matchWinner: null,
+        timestamp: Date.now(),
+      };
+    }
+
+    it('returns nearest alive opponent', () => {
+      const state = makeState({
+        me: { x: 0, y: 0, alive: true },
+        far: { x: 500, y: 500, alive: true },
+        near: { x: 100, y: 0, alive: true },
+      });
+      const result = findNearestAliveOpponent('me', ['far', 'near'], state);
+      expect(result).toBe('near');
+    });
+
+    it('skips dead opponents', () => {
+      const state = makeState({
+        me: { x: 0, y: 0, alive: true },
+        near: { x: 100, y: 0, alive: false },
+        far: { x: 500, y: 500, alive: true },
+      });
+      const result = findNearestAliveOpponent('me', ['near', 'far'], state);
+      expect(result).toBe('far');
+    });
+
+    it('skips eliminated opponents', () => {
+      const state = makeState({
+        me: { x: 0, y: 0, alive: true },
+        near: { x: 100, y: 0, alive: true, eliminated: true },
+        far: { x: 500, y: 500, alive: true },
+      });
+      const result = findNearestAliveOpponent('me', ['near', 'far'], state);
+      expect(result).toBe('far');
+    });
+
+    it('returns null when no alive opponents', () => {
+      const state = makeState({
+        me: { x: 0, y: 0, alive: true },
+        opp1: { x: 100, y: 0, alive: false },
+        opp2: { x: 200, y: 0, alive: false },
+      });
+      const result = findNearestAliveOpponent('me', ['opp1', 'opp2'], state);
+      expect(result).toBeNull();
+    });
+
+    it('returns first uid when my tank is missing from state', () => {
+      const state = makeState({
+        opp1: { x: 100, y: 0, alive: true },
+      });
+      const result = findNearestAliveOpponent('missing', ['opp1'], state);
+      expect(result).toBe('opp1');
     });
   });
 });

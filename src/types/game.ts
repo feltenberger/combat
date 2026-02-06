@@ -8,6 +8,9 @@ export interface TankState {
   y: number;
   angle: number; // radians
   alive: boolean;
+  lives?: number;
+  eliminated?: boolean;
+  invincible?: boolean;
 }
 
 export interface BulletState {
@@ -51,6 +54,7 @@ export type MatchPhase =
 export interface RoundResult {
   winner: string | null; // uid of winner, null for draw
   loser: string | null;
+  eliminations?: string[]; // uids of eliminated players (for multi-player)
 }
 
 export interface GameState {
@@ -64,11 +68,19 @@ export interface GameState {
   roundResult: RoundResult | null;
   matchWinner: string | null;
   timestamp: number;
+  lives?: Record<string, number>;
 }
 
 import { TankColor } from '../config/constants';
 
 export type BotDifficulty = 'easy' | 'defensive' | 'offensive' | 'hard';
+
+export interface CpuPlayerConfig {
+  difficulty: BotDifficulty;
+  uid: string;
+  name: string;
+  color: TankColor;
+}
 
 export interface GameConfig {
   arenaIndex: number;
@@ -81,4 +93,6 @@ export interface GameConfig {
   guestColor: TankColor;
   cpuDifficulty?: BotDifficulty;
   fireRate?: number;
+  cpuPlayers?: CpuPlayerConfig[];
+  livesPerRound?: number;
 }

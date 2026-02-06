@@ -7,6 +7,8 @@ export function checkBulletTankCollision(bullet: Bullet, tank: Tank): boolean {
   if (!bullet.alive || !tank.alive) return false;
   // Don't hit your own tank
   if (bullet.ownerId === tank.uid) return false;
+  // Don't hit invincible tanks
+  if (tank.isInvincible()) return false;
 
   const dist = distance(
     { x: bullet.x, y: bullet.y },

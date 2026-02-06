@@ -1,5 +1,5 @@
 import { TankState, PlayerInput } from '../types/game';
-import { TANK_SPEED, TANK_ROTATION_SPEED, TANK_RADIUS, TILE_SIZE } from '../config/constants';
+import { TANK_SPEED, TANK_ROTATION_SPEED, TANK_RADIUS, TILE_SIZE, DEFAULT_LIVES_PER_ROUND } from '../config/constants';
 import { Arena } from './Arena';
 import { pixelToTile } from '../utils/math';
 
@@ -10,6 +10,9 @@ export class Tank {
   alive: boolean;
   uid: string;
   bulletCooldown: number = 0;
+  lives: number = DEFAULT_LIVES_PER_ROUND;
+  eliminated: boolean = false;
+  invincibilityTimer: number = 0;
 
   constructor(uid: string, x: number, y: number, angle: number) {
     this.uid = uid;
@@ -19,8 +22,39 @@ export class Tank {
     this.alive = true;
   }
 
+  isInvincible(): boolean {
+    return this.invincibilityTimer > 0;
+  }
+
+  loseLife(): boolean {
+    this.lives--;
+    if (this.lives <= 0) {
+      this.lives = 0;
+      this.eliminated = true;
+      return true; // eliminated
+    }
+    return false; // still has lives
+  }
+
+  respawnForNewRound(x: number, y: number, angle: number, lives: number): void {
+    this.x = x;
+    this.y = y;
+    this.angle = angle;
+    this.alive = true;
+    this.bulletCooldown = 0;
+    this.lives = lives;
+    this.eliminated = false;
+    this.invincibilityTimer = 0;
+  }
+
   update(input: PlayerInput, dt: number, arena: Arena): void {
     if (!this.alive) return;
+
+    // Tick down invincibility
+    if (this.invincibilityTimer > 0) {
+      this.invincibilityTimer -= dt;
+      if (this.invincibilityTimer < 0) this.invincibilityTimer = 0;
+    }
 
     let dx = 0;
     let dy = 0;
@@ -112,6 +146,9 @@ export class Tank {
       y: this.y,
       angle: this.angle,
       alive: this.alive,
+      lives: this.lives,
+      eliminated: this.eliminated,
+      invincible: this.isInvincible(),
     };
   }
 
@@ -120,6 +157,12 @@ export class Tank {
     this.y = state.y;
     this.angle = state.angle;
     this.alive = state.alive;
+    if (state.lives !== undefined) this.lives = state.lives;
+    if (state.eliminated !== undefined) this.eliminated = state.eliminated;
+    if (state.invincible !== undefined) {
+      // We can't set the exact timer from a boolean, but we can approximate
+      this.invincibilityTimer = state.invincible ? 0.1 : 0;
+    }
   }
 
   kill(): void {

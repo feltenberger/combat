@@ -4,6 +4,7 @@ import { Arena } from '../engine/Arena';
 export interface BotContext {
   myUid: string;
   opponentUid: string;
+  allOpponentUids: string[];
   gameState: GameState;
   arena: Arena;
   dt: number;

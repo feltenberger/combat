@@ -1,6 +1,7 @@
 import { ref, set, onValue, off, remove, push } from 'firebase/database';
 import { rtdb } from '../config/firebase';
 import { ChallengeData } from '../types/firebase';
+import { CpuPlayerConfig } from '../types/game';
 import { TankColor, DEFAULT_FIRE_RATE, ROUNDS_TO_WIN } from '../config/constants';
 
 export function sendChallenge(
@@ -12,6 +13,8 @@ export function sendChallenge(
   fromColor: TankColor = 'blue',
   fireRate: number = DEFAULT_FIRE_RATE,
   roundsToWin: number = ROUNDS_TO_WIN,
+  livesPerRound?: number,
+  cpuPlayers?: CpuPlayerConfig[],
 ): string {
   const challengeRef = ref(rtdb, `challenges/${toUid}`);
   const challenge: ChallengeData = {
@@ -25,6 +28,8 @@ export function sendChallenge(
     fireRate,
     roundsToWin,
     timestamp: Date.now(),
+    ...(livesPerRound !== undefined && { livesPerRound }),
+    ...(cpuPlayers && cpuPlayers.length > 0 && { cpuPlayers }),
   };
   set(challengeRef, challenge);
   return toUid;
@@ -62,6 +67,8 @@ export async function acceptChallenge(
     guestColor,
     fireRate: challenge.fireRate ?? DEFAULT_FIRE_RATE,
     createdAt: Date.now(),
+    ...(challenge.livesPerRound !== undefined && { livesPerRound: challenge.livesPerRound }),
+    ...(Array.isArray(challenge.cpuPlayers) && challenge.cpuPlayers.length > 0 && { cpuPlayers: challenge.cpuPlayers }),
   });
 
   const statusRef = ref(rtdb, `games/${gameId}/status`);

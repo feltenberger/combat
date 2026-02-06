@@ -9,12 +9,13 @@ import { Bullet } from '../../engine/Bullet';
 import { GameSyncService } from '../../firebase/gameSync';
 import { saveMatchResult } from '../../firebase/matchHistory';
 import { useGameLoop } from '../../hooks/useGameLoop';
-import { PlayerInput, GameState } from '../../types/game';
+import { PlayerInput, GameState, CpuPlayerConfig } from '../../types/game';
 import { GameRoom } from '../../types/firebase';
-import { STATE_BROADCAST_INTERVAL, ROUNDS_TO_WIN, COUNTDOWN_DURATION, TankColor, DEFAULT_FIRE_RATE } from '../../config/constants';
+import { STATE_BROADCAST_INTERVAL, ROUNDS_TO_WIN, COUNTDOWN_DURATION, TankColor, DEFAULT_FIRE_RATE, DEFAULT_LIVES_PER_ROUND } from '../../config/constants';
 import { lerpAngle, lerp } from '../../utils/math';
 import { createBot } from '../../bot/BotFactory';
 import { BotBrain } from '../../bot/BotBrain';
+import { findNearestAliveOpponent } from '../../bot/BotUtilities';
 import { SoundManager, loadSoundPrefs } from '../../engine/SoundManager';
 
 interface GamePageProps {
@@ -46,7 +47,7 @@ export function GamePage({ uid }: GamePageProps) {
   const playerColorsRef = useRef<Record<string, TankColor>>({});
   const matchResultSavedRef = useRef(false);
   const isCpuGameRef = useRef(false);
-  const botRef = useRef<BotBrain | null>(null);
+  const botsRef = useRef<Map<string, BotBrain>>(new Map());
   const soundRef = useRef<SoundManager | null>(null);
 
   // For guest interpolation
@@ -62,20 +63,41 @@ export function GamePage({ uid }: GamePageProps) {
     configRef.current = cfg;
 
     isHost.current = cfg.hostUid === uid;
-    playerOrderRef.current = [cfg.hostUid, cfg.guestUid];
-    playerNamesRef.current = {
+
+    // Build player order: host, guest, then additional CPU players
+    const cpuPlayers = cfg.cpuPlayers || [];
+    const allUids = new Set<string>([cfg.hostUid, cfg.guestUid]);
+    for (const cpu of cpuPlayers) {
+      allUids.add(cpu.uid);
+    }
+    playerOrderRef.current = Array.from(allUids);
+
+    // Build names
+    const names: Record<string, string> = {
       [cfg.hostUid]: cfg.hostName,
       [cfg.guestUid]: cfg.guestName,
     };
-    playerColorsRef.current = {
+    for (const cpu of cpuPlayers) {
+      names[cpu.uid] = cpu.name;
+    }
+    playerNamesRef.current = names;
+
+    // Build colors
+    const colors: Record<string, TankColor> = {
       [cfg.hostUid]: cfg.hostColor || 'blue',
       [cfg.guestUid]: cfg.guestColor || 'red',
     };
+    for (const cpu of cpuPlayers) {
+      colors[cpu.uid] = cpu.color;
+    }
+    playerColorsRef.current = colors;
 
     if (!engineRef.current) {
-      const engine = new GameEngine(cfg.arenaIndex, cfg.roundsToWin || ROUNDS_TO_WIN, cfg.fireRate ?? DEFAULT_FIRE_RATE);
-      engine.addPlayer(cfg.hostUid);
-      engine.addPlayer(cfg.guestUid);
+      const livesPerRound = cfg.livesPerRound ?? DEFAULT_LIVES_PER_ROUND;
+      const engine = new GameEngine(cfg.arenaIndex, cfg.roundsToWin || ROUNDS_TO_WIN, cfg.fireRate ?? DEFAULT_FIRE_RATE, livesPerRound);
+      for (const pUid of playerOrderRef.current) {
+        engine.addPlayer(pUid);
+      }
       engine.sound = soundRef.current;
       engineRef.current = engine;
       engine.startMatch();
@@ -88,7 +110,17 @@ export function GamePage({ uid }: GamePageProps) {
     if (!cpuConfig || !uid) return;
 
     isCpuGameRef.current = true;
-    botRef.current = createBot(cpuConfig.cpuDifficulty!);
+
+    // Create bot instances from cpuPlayers array or fall back to single cpuDifficulty
+    const cpuPlayers = cpuConfig.cpuPlayers || [];
+    if (cpuPlayers.length > 0) {
+      for (const cpu of cpuPlayers) {
+        botsRef.current.set(cpu.uid, createBot(cpu.difficulty));
+      }
+    } else if (cpuConfig.cpuDifficulty) {
+      botsRef.current.set(cpuConfig.guestUid, createBot(cpuConfig.cpuDifficulty));
+    }
+
     const sm = new SoundManager();
     sm.resume();
     sm.applyPrefs(loadSoundPrefs());
@@ -128,10 +160,24 @@ export function GamePage({ uid }: GamePageProps) {
 
       if (!engineRef.current) return;
 
+      // If host, create bots for any CPU players and listen for remote human input
       if (isHost.current) {
-        sync.listenToInput(cfg.guestUid, (input) => {
-          remoteInputRef.current = input;
-        });
+        const cpuPlayers = cfg.cpuPlayers || [];
+        if (cpuPlayers.length > 0) {
+          for (const cpu of cpuPlayers) {
+            if (!botsRef.current.has(cpu.uid)) {
+              botsRef.current.set(cpu.uid, createBot(cpu.difficulty));
+            }
+          }
+        }
+
+        // Listen for human guest input (if guest is not a CPU)
+        const humanGuest = !cpuPlayers.some(c => c.uid === cfg.guestUid);
+        if (humanGuest) {
+          sync.listenToInput(cfg.guestUid, (input) => {
+            remoteInputRef.current = input;
+          });
+        }
       } else {
         sync.listenToState((state) => {
           const prev = nextStateRef.current;
@@ -147,12 +193,12 @@ export function GamePage({ uid }: GamePageProps) {
             const prevIds = new Set(prevBullets.map(b => b.id));
             const nextIds = new Set(nextBullets.map(b => b.id));
 
-            // New bullets → gunshot
+            // New bullets -> gunshot
             for (const id of nextIds) {
               if (!prevIds.has(id)) sm.playGunshot();
             }
 
-            // Disappeared bullets → wall hit, rock hit, or explosion
+            // Disappeared bullets -> wall hit, rock hit, or explosion
             for (const id of prevIds) {
               if (!nextIds.has(id)) {
                 // Check if a tank died (explosion)
@@ -230,33 +276,46 @@ export function GamePage({ uid }: GamePageProps) {
       const inputs = new Map<string, PlayerInput>();
       inputs.set(uid!, localInput);
 
-      const opponentUid = playerOrderRef.current.find(id => id !== uid) || '';
+      const currentState = engine.getState();
+      const allPlayerUids = playerOrderRef.current;
 
-      if (isCpuGameRef.current && botRef.current) {
-        // Generate bot input locally
-        const botInput = botRef.current.update({
-          myUid: opponentUid,
-          opponentUid: uid!,
-          gameState: engine.getState(),
+      // Generate bot inputs
+      for (const [botUid, bot] of botsRef.current.entries()) {
+        const otherUids = allPlayerUids.filter(id => id !== botUid);
+        const nearestOpponent = findNearestAliveOpponent(botUid, otherUids, currentState);
+
+        const botInput = bot.update({
+          myUid: botUid,
+          opponentUid: nearestOpponent || otherUids[0] || uid!,
+          allOpponentUids: otherUids,
+          gameState: currentState,
           arena: engine.arena,
           dt,
-          gameTime: 0,
+          gameTime: engine.gameTime,
         });
-        inputs.set(opponentUid, botInput);
+        inputs.set(botUid, botInput);
 
-        // Reset bot on new round
+        // Reset bots on new round
         if (engine.phase === 'COUNTDOWN' && engine.countdown >= COUNTDOWN_DURATION - 0.1) {
-          botRef.current.reset();
+          bot.reset();
         }
-      } else {
-        inputs.set(opponentUid, remoteInputRef.current);
+      }
+
+      // For online games, get remote human input
+      if (!isCpuGameRef.current) {
+        // Find human players who are not the local player and not bots
+        for (const pUid of allPlayerUids) {
+          if (pUid !== uid && !botsRef.current.has(pUid)) {
+            inputs.set(pUid, remoteInputRef.current);
+          }
+        }
+
+        syncRef.current?.writeInput(localInput);
       }
 
       engine.update(dt, inputs);
 
       if (!isCpuGameRef.current) {
-        syncRef.current?.writeInput(localInput);
-
         const now = performance.now();
         if (now - lastBroadcastRef.current >= STATE_BROADCAST_INTERVAL) {
           syncRef.current?.writeState(engine.getState());
@@ -272,6 +331,15 @@ export function GamePage({ uid }: GamePageProps) {
         }
         const cfg = configRef.current;
         if (cfg && engine.matchWinner) {
+          const cpuPlayers = cfg.cpuPlayers || [];
+          const players = playerOrderRef.current.map(pUid => ({
+            uid: pUid,
+            name: playerNamesRef.current[pUid] || 'Unknown',
+            score: engine.scores.get(pUid) || 0,
+            color: playerColorsRef.current[pUid],
+            isCpu: botsRef.current.has(pUid),
+          }));
+
           saveMatchResult({
             gameId: gameId!,
             hostUid: cfg.hostUid,
@@ -286,6 +354,9 @@ export function GamePage({ uid }: GamePageProps) {
             arenaIndex: cfg.arenaIndex,
             completedAt: Date.now(),
             cpuDifficulty: cfg.cpuDifficulty,
+            players,
+            livesPerRound: cfg.livesPerRound,
+            playerCount: playerOrderRef.current.length,
           });
         }
       }
@@ -314,6 +385,11 @@ export function GamePage({ uid }: GamePageProps) {
                 tank.y = lerp(prevTank.y, nextTank.y, t);
                 tank.angle = lerpAngle(prevTank.angle, nextTank.angle, t);
                 tank.alive = nextTank.alive;
+                if (nextTank.lives !== undefined) tank.lives = nextTank.lives;
+                if (nextTank.eliminated !== undefined) tank.eliminated = nextTank.eliminated;
+                if (nextTank.invincible !== undefined) {
+                  tank.invincibilityTimer = nextTank.invincible ? 0.1 : 0;
+                }
               }
             } else if (nextTank) {
               const tank = engine.tanks.get(tankUid);

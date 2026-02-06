@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { GameEngine } from '../../engine/GameEngine';
 import { PlayerInput } from '../../types/game';
-import { COUNTDOWN_DURATION, ROUND_OVER_DELAY, ROUNDS_TO_WIN, FIRE_RATE_PRESETS, DEFAULT_FIRE_RATE } from '../../config/constants';
+import { COUNTDOWN_DURATION, ROUND_OVER_DELAY, ROUNDS_TO_WIN, FIRE_RATE_PRESETS, DEFAULT_FIRE_RATE, DEFAULT_LIVES_PER_ROUND, RESPAWN_INVINCIBILITY_DURATION } from '../../config/constants';
 
 function noInput(): PlayerInput {
   return { left: false, right: false, up: false, down: false, fire: false, timestamp: 0 };
@@ -258,6 +258,115 @@ describe('GameEngine', () => {
       const engine2 = new GameEngine(0);
       engine2.applyState(state);
       expect(engine2.bullets).toEqual([]);
+    });
+
+    it('serializes and deserializes lives map', () => {
+      const eng = new GameEngine(0, ROUNDS_TO_WIN, DEFAULT_FIRE_RATE, 3);
+      eng.addPlayer('p1');
+      eng.addPlayer('p2');
+      eng.startMatch();
+
+      const state = eng.getState();
+      expect(state.lives).toBeDefined();
+      expect(state.lives!['p1']).toBe(3);
+      expect(state.lives!['p2']).toBe(3);
+
+      const eng2 = new GameEngine(0);
+      eng2.addPlayer('p1');
+      eng2.addPlayer('p2');
+      eng2.applyState(state);
+      expect(eng2.tanks.get('p1')!.lives).toBe(3);
+    });
+  });
+
+  describe('lives system', () => {
+    it('initializes tanks with configured livesPerRound', () => {
+      const eng = new GameEngine(0, ROUNDS_TO_WIN, DEFAULT_FIRE_RATE, 3);
+      eng.addPlayer('p1');
+      eng.addPlayer('p2');
+      expect(eng.tanks.get('p1')!.lives).toBe(3);
+      expect(eng.tanks.get('p2')!.lives).toBe(3);
+    });
+
+    it('defaults livesPerRound to DEFAULT_LIVES_PER_ROUND', () => {
+      expect(engine.livesPerRound).toBe(DEFAULT_LIVES_PER_ROUND);
+    });
+
+    it('resets lives on new round', () => {
+      const eng = new GameEngine(0, ROUNDS_TO_WIN, DEFAULT_FIRE_RATE, 3);
+      eng.addPlayer('p1');
+      eng.addPlayer('p2');
+      eng.startMatch();
+
+      // Manually reduce lives
+      eng.tanks.get('p1')!.lives = 1;
+
+      // Simulate round over -> next round
+      eng.scores.set('p2', 1);
+      eng.phase = 'ROUND_OVER';
+      eng['roundOverTimer'] = 0.01;
+      eng.roundResult = { winner: 'p2', loser: 'p1' };
+
+      const inputs = new Map<string, PlayerInput>();
+      inputs.set('p1', noInput());
+      inputs.set('p2', noInput());
+      eng.update(0.1, inputs);
+
+      // Should be in COUNTDOWN for next round
+      expect(eng.phase).toBe('COUNTDOWN');
+      // Lives should be reset
+      expect(eng.tanks.get('p1')!.lives).toBe(3);
+      expect(eng.tanks.get('p1')!.eliminated).toBe(false);
+    });
+  });
+
+  describe('3-4 player games', () => {
+    it('supports 3 players', () => {
+      const eng = new GameEngine(0, ROUNDS_TO_WIN);
+      eng.addPlayer('p1');
+      eng.addPlayer('p2');
+      eng.addPlayer('p3');
+      expect(eng.tanks.size).toBe(3);
+      eng.startMatch();
+      expect(eng.phase).toBe('COUNTDOWN');
+    });
+
+    it('supports 4 players', () => {
+      const eng = new GameEngine(0, ROUNDS_TO_WIN);
+      eng.addPlayer('p1');
+      eng.addPlayer('p2');
+      eng.addPlayer('p3');
+      eng.addPlayer('p4');
+      expect(eng.tanks.size).toBe(4);
+      eng.startMatch();
+      expect(eng.phase).toBe('COUNTDOWN');
+    });
+
+    it('positions 4 players at distinct spawn points', () => {
+      const eng = new GameEngine(0, ROUNDS_TO_WIN);
+      eng.addPlayer('p1');
+      eng.addPlayer('p2');
+      eng.addPlayer('p3');
+      eng.addPlayer('p4');
+
+      const positions = new Set<string>();
+      for (const [, tank] of eng.tanks) {
+        positions.add(`${tank.x},${tank.y}`);
+      }
+      expect(positions.size).toBe(4);
+    });
+  });
+
+  describe('backward compat with lives=1', () => {
+    it('behaves identically to original when livesPerRound=1', () => {
+      // With lives=1, first kill should end the round (eliminate immediately)
+      const eng = new GameEngine(0, ROUNDS_TO_WIN, DEFAULT_FIRE_RATE, 1);
+      eng.addPlayer('p1');
+      eng.addPlayer('p2');
+      eng.startMatch();
+
+      expect(eng.tanks.get('p1')!.lives).toBe(1);
+      expect(eng.tanks.get('p2')!.lives).toBe(1);
     });
   });
 });

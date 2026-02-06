@@ -38,7 +38,14 @@ function createOpenField(): ArenaDefinition {
   }
   tiles[3][3] = S1;
   tiles[16][26] = S2;
-  return { name: 'Open Field', tiles, spawn1: { col: 3, row: 3 }, spawn2: { col: 26, row: 16 } };
+  return {
+    name: 'Open Field',
+    tiles,
+    spawn1: { col: 3, row: 3 },
+    spawn2: { col: 26, row: 16 },
+    spawn3: { col: 26, row: 3 },
+    spawn4: { col: 3, row: 16 },
+  };
 }
 
 function createSimpleMaze(): ArenaDefinition {
@@ -61,7 +68,14 @@ function createSimpleMaze(): ArenaDefinition {
   }
   tiles[10][3] = S1;
   tiles[10][26] = S2;
-  return { name: 'Simple Maze', tiles, spawn1: { col: 3, row: 10 }, spawn2: { col: 26, row: 10 } };
+  return {
+    name: 'Simple Maze',
+    tiles,
+    spawn1: { col: 3, row: 10 },
+    spawn2: { col: 26, row: 10 },
+    spawn3: { col: 15, row: 3 },
+    spawn4: { col: 15, row: 16 },
+  };
 }
 
 function createComplexMaze(): ArenaDefinition {
@@ -94,7 +108,14 @@ function createComplexMaze(): ArenaDefinition {
   }
   tiles[3][3] = S1;
   tiles[16][26] = S2;
-  return { name: 'Complex Maze', tiles, spawn1: { col: 3, row: 3 }, spawn2: { col: 26, row: 16 } };
+  return {
+    name: 'Complex Maze',
+    tiles,
+    spawn1: { col: 3, row: 3 },
+    spawn2: { col: 26, row: 16 },
+    spawn3: { col: 26, row: 3 },
+    spawn4: { col: 3, row: 16 },
+  };
 }
 
 function createFortress(): ArenaDefinition {
@@ -121,7 +142,14 @@ function createFortress(): ArenaDefinition {
   }
   tiles[10][5] = S1;
   tiles[10][24] = S2;
-  return { name: 'Fortress', tiles, spawn1: { col: 5, row: 10 }, spawn2: { col: 24, row: 10 } };
+  return {
+    name: 'Fortress',
+    tiles,
+    spawn1: { col: 5, row: 10 },
+    spawn2: { col: 24, row: 10 },
+    spawn3: { col: 15, row: 3 },
+    spawn4: { col: 15, row: 16 },
+  };
 }
 
 export const ARENAS: ArenaDefinition[] = [
@@ -130,6 +158,9 @@ export const ARENAS: ArenaDefinition[] = [
   createComplexMaze(),
   createFortress(),
 ];
+
+// Spawn angles: face right, left, down, up
+const SPAWN_ANGLES = [0, Math.PI, Math.PI / 2, -Math.PI / 2];
 
 export class Arena {
   definition: ArenaDefinition;
@@ -182,12 +213,18 @@ export class Arena {
   }
 
   getSpawnPosition(playerIndex: number): { x: number; y: number; angle: number } {
-    const spawn = playerIndex === 0 ? this.definition.spawn1 : this.definition.spawn2;
+    const spawns = [
+      this.definition.spawn1,
+      this.definition.spawn2,
+      this.definition.spawn3,
+      this.definition.spawn4,
+    ];
+    const spawn = spawns[playerIndex % spawns.length];
     const pos = tileToPixel(spawn.col, spawn.row, TILE_SIZE);
     return {
       x: pos.x,
       y: pos.y,
-      angle: playerIndex === 0 ? 0 : Math.PI,
+      angle: SPAWN_ANGLES[playerIndex % SPAWN_ANGLES.length],
     };
   }
 

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Tank } from '../../engine/Tank';
 import { Arena } from '../../engine/Arena';
 import { PlayerInput } from '../../types/game';
-import { TANK_SPEED, TANK_ROTATION_SPEED, TANK_RADIUS } from '../../config/constants';
+import { TANK_SPEED, TANK_ROTATION_SPEED, TANK_RADIUS, DEFAULT_LIVES_PER_ROUND, RESPAWN_INVINCIBILITY_DURATION } from '../../config/constants';
 
 function noInput(): PlayerInput {
   return { left: false, right: false, up: false, down: false, fire: false, timestamp: 0 };
@@ -160,7 +160,10 @@ describe('Tank', () => {
       tank.angle = 1.5;
       tank.alive = false;
       const state = tank.getState();
-      expect(state).toEqual({ x: 123, y: 456, angle: 1.5, alive: false });
+      expect(state.x).toBe(123);
+      expect(state.y).toBe(456);
+      expect(state.angle).toBe(1.5);
+      expect(state.alive).toBe(false);
 
       const tank2 = new Tank('t2', 0, 0, 0);
       tank2.setState(state);
@@ -168,6 +171,110 @@ describe('Tank', () => {
       expect(tank2.y).toBe(456);
       expect(tank2.angle).toBe(1.5);
       expect(tank2.alive).toBe(false);
+    });
+
+    it('includes lives, eliminated, and invincible in state', () => {
+      tank.lives = 3;
+      tank.eliminated = false;
+      tank.invincibilityTimer = 1.0;
+      const state = tank.getState();
+      expect(state.lives).toBe(3);
+      expect(state.eliminated).toBe(false);
+      expect(state.invincible).toBe(true);
+    });
+
+    it('restores lives and eliminated from state', () => {
+      const tank2 = new Tank('t2', 0, 0, 0);
+      tank2.setState({ x: 0, y: 0, angle: 0, alive: true, lives: 2, eliminated: true, invincible: true });
+      expect(tank2.lives).toBe(2);
+      expect(tank2.eliminated).toBe(true);
+      expect(tank2.invincibilityTimer).toBeGreaterThan(0);
+    });
+  });
+
+  describe('lives system', () => {
+    it('initializes with DEFAULT_LIVES_PER_ROUND', () => {
+      expect(tank.lives).toBe(DEFAULT_LIVES_PER_ROUND);
+      expect(tank.eliminated).toBe(false);
+    });
+
+    it('loseLife decrements lives', () => {
+      tank.lives = 3;
+      tank.loseLife();
+      expect(tank.lives).toBe(2);
+      expect(tank.eliminated).toBe(false);
+    });
+
+    it('loseLife returns false when still has lives', () => {
+      tank.lives = 3;
+      expect(tank.loseLife()).toBe(false);
+    });
+
+    it('loseLife eliminates at 0 lives', () => {
+      tank.lives = 1;
+      const eliminated = tank.loseLife();
+      expect(eliminated).toBe(true);
+      expect(tank.lives).toBe(0);
+      expect(tank.eliminated).toBe(true);
+    });
+
+    it('loseLife clamps lives to 0', () => {
+      tank.lives = 1;
+      tank.loseLife();
+      expect(tank.lives).toBe(0);
+    });
+  });
+
+  describe('invincibility', () => {
+    it('isInvincible returns true when timer > 0', () => {
+      tank.invincibilityTimer = 1.0;
+      expect(tank.isInvincible()).toBe(true);
+    });
+
+    it('isInvincible returns false when timer is 0', () => {
+      tank.invincibilityTimer = 0;
+      expect(tank.isInvincible()).toBe(false);
+    });
+
+    it('invincibility timer ticks down during update', () => {
+      tank.invincibilityTimer = 1.0;
+      tank.update(noInput(), 0.5, arena);
+      expect(tank.invincibilityTimer).toBeCloseTo(0.5);
+    });
+
+    it('invincibility timer does not go below 0', () => {
+      tank.invincibilityTimer = 0.01;
+      tank.update(noInput(), 0.1, arena);
+      expect(tank.invincibilityTimer).toBe(0);
+    });
+
+    it('does not tick invincibility when dead', () => {
+      tank.invincibilityTimer = 1.0;
+      tank.kill();
+      tank.update(noInput(), 0.5, arena);
+      // dead tanks skip update entirely
+      expect(tank.invincibilityTimer).toBe(1.0);
+    });
+  });
+
+  describe('respawnForNewRound', () => {
+    it('fully resets tank state', () => {
+      tank.kill();
+      tank.lives = 0;
+      tank.eliminated = true;
+      tank.bulletCooldown = 0.5;
+      tank.invincibilityTimer = 1.0;
+
+      tank.respawnForNewRound(200, 300, Math.PI / 2, 3);
+
+      expect(tank.x).toBe(200);
+      expect(tank.y).toBe(300);
+      expect(tank.angle).toBe(Math.PI / 2);
+      expect(tank.alive).toBe(true);
+      expect(tank.lives).toBe(3);
+      expect(tank.eliminated).toBe(false);
+      expect(tank.bulletCooldown).toBe(0);
+      expect(tank.invincibilityTimer).toBe(0);
     });
   });
 });

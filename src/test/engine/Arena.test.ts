@@ -113,6 +113,44 @@ describe('Arena', () => {
       expect(spawn.x).toBe(3 * TILE_SIZE + TILE_SIZE / 2);
       expect(spawn.y).toBe(3 * TILE_SIZE + TILE_SIZE / 2);
     });
+
+    it('returns spawn 3 for player 2 facing south', () => {
+      const arena = new Arena(0);
+      const spawn = arena.getSpawnPosition(2);
+      expect(spawn.angle).toBeCloseTo(Math.PI / 2); // facing down
+      expect(spawn.x).toBeGreaterThan(0);
+      expect(spawn.y).toBeGreaterThan(0);
+    });
+
+    it('returns spawn 4 for player 3 facing north', () => {
+      const arena = new Arena(0);
+      const spawn = arena.getSpawnPosition(3);
+      expect(spawn.angle).toBeCloseTo(-Math.PI / 2); // facing up
+    });
+
+    it('all 4 spawn positions are distinct', () => {
+      const arena = new Arena(0);
+      const spawns = [0, 1, 2, 3].map(i => arena.getSpawnPosition(i));
+      const positions = spawns.map(s => `${s.x},${s.y}`);
+      expect(new Set(positions).size).toBe(4);
+    });
+
+    it('wraps spawn index for player index >= 4', () => {
+      const arena = new Arena(0);
+      const spawn0 = arena.getSpawnPosition(0);
+      const spawn4 = arena.getSpawnPosition(4);
+      expect(spawn4.x).toBe(spawn0.x);
+      expect(spawn4.y).toBe(spawn0.y);
+    });
+
+    it('all arenas have 4 distinct spawn positions', () => {
+      for (let arenaIdx = 0; arenaIdx < ARENAS.length; arenaIdx++) {
+        const arena = new Arena(arenaIdx);
+        const spawns = [0, 1, 2, 3].map(i => arena.getSpawnPosition(i));
+        const positions = spawns.map(s => `${s.x},${s.y}`);
+        expect(new Set(positions).size).toBe(4);
+      }
+    });
   });
 
   describe('resetRocks', () => {
