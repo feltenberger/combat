@@ -914,3 +914,39 @@ button.small {
   color: #666;
   font-size: 0.8rem;
 }
+
+/* Connection Indicator */
+.connection-indicator {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 4px 12px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.connection-indicator.connecting {
+  color: #ffdd44;
+  border-color: rgba(255, 221, 68, 0.3);
+}
+
+.connection-indicator.p2p {
+  color: #44dd88;
+  border-color: rgba(68, 221, 136, 0.3);
+}
+
+.connection-indicator.relay {
+  color: #4a90d9;
+  border-color: rgba(74, 144, 217, 0.3);
+}
+
+.connection-indicator.disconnected {
+  color: #dd4444;
+  border-color: rgba(221, 68, 68, 0.3);
+}

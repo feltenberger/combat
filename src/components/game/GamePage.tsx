@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { GameCanvas, GameCanvasHandle } from './GameCanvas';
 import { TouchControls } from './TouchControls';
+import { ConnectionIndicator } from './ConnectionIndicator';
 import { GameEngine } from '../../engine/GameEngine';
 import { Renderer } from '../../renderer/Renderer';
 import { InputManager } from '../../engine/InputManager';
@@ -17,6 +18,8 @@ import { createBot } from '../../bot/BotFactory';
 import { BotBrain } from '../../bot/BotBrain';
 import { findNearestAliveOpponent } from '../../bot/BotUtilities';
 import { SoundManager, loadSoundPrefs } from '../../engine/SoundManager';
+import { HybridTransport } from '../../network/HybridTransport';
+import { ConnectionState, TransportType } from '../../network/NetworkTransport';
 
 interface GamePageProps {
   uid: string | null;
@@ -32,10 +35,13 @@ export function GamePage({ uid }: GamePageProps) {
   const rendererRef = useRef(new Renderer());
   const inputManagerRef = useRef(new InputManager());
   const syncRef = useRef<GameSyncService | null>(null);
+  const transportRef = useRef<HybridTransport | null>(null);
 
   const [config, setConfig] = useState<GameRoom['config'] | null>(null);
   const [disconnected, setDisconnected] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
+  const [transportType, setTransportType] = useState<TransportType>('relay');
 
   const isHost = useRef(false);
   const remoteInputRef = useRef<PlayerInput>({
@@ -55,7 +61,6 @@ export function GamePage({ uid }: GamePageProps) {
   const nextStateRef = useRef<GameState | null>(null);
   const stateReceivedTimeRef = useRef(0);
   const configRef = useRef<GameRoom['config'] | null>(null);
-  const lastSoundStateRef = useRef<GameState | null>(null);
 
   // Helper to initialize game engine from config
   const initFromConfig = useCallback((cfg: GameRoom['config']) => {
@@ -104,7 +109,7 @@ export function GamePage({ uid }: GamePageProps) {
     }
   }, [uid]);
 
-  // CPU game setup — fully local, no Firebase
+  // CPU game setup — fully local, no Firebase or transport
   useEffect(() => {
     const cpuConfig = (location.state as { cpuConfig?: GameRoom['config'] })?.cpuConfig;
     if (!cpuConfig || !uid) return;
@@ -135,7 +140,7 @@ export function GamePage({ uid }: GamePageProps) {
     };
   }, [uid, location.state, initFromConfig]);
 
-  // Online game setup — uses Firebase
+  // Online game setup — uses Firebase for config/presence + HybridTransport for game data
   useEffect(() => {
     const cpuConfig = (location.state as { cpuConfig?: GameRoom['config'] })?.cpuConfig;
     if (cpuConfig) return; // CPU games handled above
@@ -146,6 +151,7 @@ export function GamePage({ uid }: GamePageProps) {
     sm.applyPrefs(loadSoundPrefs());
     soundRef.current = sm;
 
+    // GameSyncService handles config, presence, and status
     const sync = new GameSyncService(gameId, uid);
     syncRef.current = sync;
 
@@ -153,6 +159,7 @@ export function GamePage({ uid }: GamePageProps) {
     inputManagerRef.current.bind();
 
     let presenceSetUp = false;
+    let transport: HybridTransport | null = null;
 
     sync.listenToConfig((cfg) => {
       if (!cfg) return;
@@ -160,7 +167,7 @@ export function GamePage({ uid }: GamePageProps) {
 
       if (!engineRef.current) return;
 
-      // If host, create bots for any CPU players and listen for remote human input
+      // If host, create bots for any CPU players
       if (isHost.current) {
         const cpuPlayers = cfg.cpuPlayers || [];
         if (cpuPlayers.length > 0) {
@@ -170,70 +177,91 @@ export function GamePage({ uid }: GamePageProps) {
             }
           }
         }
+      }
 
-        // Listen for human guest input (if guest is not a CPU)
-        const humanGuest = !cpuPlayers.some(c => c.uid === cfg.guestUid);
-        if (humanGuest) {
-          sync.listenToInput(cfg.guestUid, (input) => {
+      // Create the hybrid transport once we have config
+      if (!transport) {
+        const remoteUid = cfg.hostUid === uid ? cfg.guestUid : cfg.hostUid;
+        transport = new HybridTransport({
+          gameId,
+          localUid: uid,
+          remoteUid,
+          isHost: cfg.hostUid === uid,
+        });
+        transportRef.current = transport;
+
+        // Listen for connection state changes
+        transport.onStateChange((state, type) => {
+          setConnectionState(state);
+          setTransportType(type);
+          if (state === 'disconnected' || state === 'failed') {
+            setDisconnected(true);
+          }
+        });
+
+        // Host receives guest input via transport
+        if (cfg.hostUid === uid) {
+          transport.onInput((input) => {
             remoteInputRef.current = input;
           });
-        }
-      } else {
-        sync.listenToState((state) => {
-          const prev = nextStateRef.current;
-          prevStateRef.current = prev;
-          nextStateRef.current = state;
-          stateReceivedTimeRef.current = performance.now();
+        } else {
+          // Guest receives state via transport
+          transport.onState((state) => {
+            const prev = nextStateRef.current;
+            prevStateRef.current = prev;
+            nextStateRef.current = state;
+            stateReceivedTimeRef.current = performance.now();
 
-          // Guest-side sound detection from state diffs
-          const sm = soundRef.current;
-          if (sm && prev && state.phase === 'PLAYING') {
-            const prevBullets = Array.isArray(prev.bullets) ? prev.bullets : [];
-            const nextBullets = Array.isArray(state.bullets) ? state.bullets : [];
-            const prevIds = new Set(prevBullets.map(b => b.id));
-            const nextIds = new Set(nextBullets.map(b => b.id));
+            // Guest-side sound detection from state diffs
+            const soundMgr = soundRef.current;
+            if (soundMgr && prev && state.phase === 'PLAYING') {
+              const prevBullets = Array.isArray(prev.bullets) ? prev.bullets : [];
+              const nextBullets = Array.isArray(state.bullets) ? state.bullets : [];
+              const prevIds = new Set(prevBullets.map(b => b.id));
+              const nextIds = new Set(nextBullets.map(b => b.id));
 
-            // New bullets -> gunshot
-            for (const id of nextIds) {
-              if (!prevIds.has(id)) sm.playGunshot();
-            }
+              // New bullets → gunshot
+              for (const id of nextIds) {
+                if (!prevIds.has(id)) soundMgr.playGunshot();
+              }
 
-            // Disappeared bullets -> wall hit, rock hit, or explosion
-            for (const id of prevIds) {
-              if (!nextIds.has(id)) {
-                // Check if a tank died (explosion)
-                const prevTanks = prev.tanks || {};
-                const nextTanks = state.tanks || {};
-                let tankDied = false;
-                for (const tUid of Object.keys(nextTanks)) {
-                  if (prevTanks[tUid]?.alive && !nextTanks[tUid]?.alive) {
-                    tankDied = true;
-                    break;
-                  }
-                }
-                if (tankDied) {
-                  sm.playExplosion();
-                } else {
-                  // Check if any rock HP decreased
-                  const prevRock = prev.rockHP || {};
-                  const nextRock = state.rockHP || {};
-                  let rockHit = false;
-                  for (const key of Object.keys(nextRock)) {
-                    if (prevRock[key] !== undefined && nextRock[key] < prevRock[key]) {
-                      rockHit = true;
+              // Disappeared bullets → wall hit, rock hit, or explosion
+              for (const id of prevIds) {
+                if (!nextIds.has(id)) {
+                  // Check if a tank died (explosion)
+                  const prevTanks = prev.tanks || {};
+                  const nextTanks = state.tanks || {};
+                  let tankDied = false;
+                  for (const tUid of Object.keys(nextTanks)) {
+                    if (prevTanks[tUid]?.alive && !nextTanks[tUid]?.alive) {
+                      tankDied = true;
                       break;
                     }
                   }
-                  if (rockHit) {
-                    sm.playRockHit();
+                  if (tankDied) {
+                    soundMgr.playExplosion();
                   } else {
-                    sm.playWallHit();
+                    // Check if any rock HP decreased
+                    const prevRock = prev.rockHP || {};
+                    const nextRock = state.rockHP || {};
+                    let rockHit = false;
+                    for (const key of Object.keys(nextRock)) {
+                      if (prevRock[key] !== undefined && nextRock[key] < prevRock[key]) {
+                        rockHit = true;
+                        break;
+                      }
+                    }
+                    if (rockHit) {
+                      soundMgr.playRockHit();
+                    } else {
+                      soundMgr.playWallHit();
+                    }
                   }
                 }
               }
             }
-          }
-        });
+          });
+        }
       }
 
       if (!presenceSetUp) {
@@ -258,6 +286,8 @@ export function GamePage({ uid }: GamePageProps) {
     return () => {
       inputManagerRef.current.unbind();
       sync.cleanup();
+      transport?.destroy();
+      transportRef.current = null;
       sm.destroy();
       soundRef.current = null;
       window.removeEventListener('click', resumeOnGesture);
@@ -316,9 +346,12 @@ export function GamePage({ uid }: GamePageProps) {
       engine.update(dt, inputs);
 
       if (!isCpuGameRef.current) {
+        // Send input and state via transport
+        transportRef.current?.sendInput(localInput);
+
         const now = performance.now();
         if (now - lastBroadcastRef.current >= STATE_BROADCAST_INTERVAL) {
-          syncRef.current?.writeState(engine.getState());
+          transportRef.current?.sendState(engine.getState());
           lastBroadcastRef.current = now;
         }
       }
@@ -361,9 +394,9 @@ export function GamePage({ uid }: GamePageProps) {
         }
       }
     } else {
-      // Guest: write input, interpolate from state snapshots
+      // Guest: send input, interpolate from state snapshots
       const localInput = inputManagerRef.current.getInput();
-      syncRef.current?.writeInput(localInput);
+      transportRef.current?.sendInput(localInput);
 
       if (nextStateRef.current) {
         if (prevStateRef.current && stateReceivedTimeRef.current > 0) {
@@ -443,6 +476,7 @@ export function GamePage({ uid }: GamePageProps) {
 
   const leaveGame = useCallback(() => {
     syncRef.current?.cleanup();
+    transportRef.current?.destroy();
     navigate('/');
   }, [navigate]);
 
@@ -477,6 +511,9 @@ export function GamePage({ uid }: GamePageProps) {
 
   return (
     <div className="game-page" ref={gamePageRef}>
+      {!isCpuGameRef.current && config && (
+        <ConnectionIndicator state={connectionState} transportType={transportType} />
+      )}
       <GameCanvas ref={canvasRef} />
       {isTouchDevice && <TouchControls inputManager={inputManagerRef.current} />}
       {isTouchDevice && (

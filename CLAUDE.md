@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What Is This
 
-Web-based multiplayer remake of Atari Combat. 2-4 tanks battle in arenas with destructible rocks and indestructible walls. Supports human vs human, human vs CPU, and mixed human+CPU games. Real-time multiplayer via Firebase.
+Web-based multiplayer remake of Atari Combat. 2-4 tanks battle in arenas with destructible rocks and indestructible walls. Supports human vs human, human vs CPU, and mixed human+CPU games. Real-time multiplayer via WebRTC P2P with Firebase fallback.
 
 ## Commands
 
@@ -57,6 +57,7 @@ React 19 + TypeScript with Vite. Canvas 2D API for all rendering (960x640, progr
 - `src/components/scoreboard/` — Match history display
 - `src/utils/math.ts` — `lerp()` and `lerpAngle()` used for guest interpolation
 - `src/bot/` — CPU bot system: `BotBrain` interface, `BotFactory`, `EasyBot`, `DefensiveBot`, `OffensiveBot`, `HardBot`, `cpuConstants`
+- `src/network/` — WebRTC P2P transport: `HybridTransport`, `WebRTCTransport`, `FirebaseTransport`, `WebRTCSignaling`
 - `src/types/` — TypeScript interfaces for game state, Firebase data, arena definitions
 
 ### Routes
@@ -81,11 +82,22 @@ When a player clicks "Challenge" on a human opponent, `ChallengeSetupModal` appe
 
 ### Networking: Host-Authoritative
 
-The **challenger** is the host and runs the game simulation. Host reads local + remote input, runs physics at 60 Hz, broadcasts state to RTDB at 20 Hz. Guest writes input to RTDB, reads state snapshots, interpolates for smooth rendering. In mixed human+CPU games, the host also runs bot AI locally.
+The **challenger** is the host and runs the game simulation. Host reads local + remote input, runs physics at 60 Hz, broadcasts state at 20 Hz. Guest receives state snapshots and interpolates for smooth rendering. In mixed human+CPU games, the host also runs bot AI locally.
 
-- Both players write input to `/games/{gameId}/input/{uid}`
-- `onDisconnect` handlers manage presence and game abandonment
 - Guest interpolation uses a 100ms buffer (`INTERPOLATION_BUFFER_MS` in constants)
+- `onDisconnect` handlers manage presence and game abandonment
+
+### WebRTC P2P Transport
+
+Game data (input/state) uses WebRTC DataChannel for low-latency P2P, with Firebase RTDB as fallback. The transport layer is in `src/network/`:
+
+- **`HybridTransport`** — Orchestrates WebRTC + Firebase. Attempts P2P first, falls back to relay after 5s timeout or on ICE failure. Can also fall back mid-game if P2P disconnects.
+- **`WebRTCTransport`** — Manages RTCPeerConnection and DataChannel. Uses Google STUN servers for NAT traversal.
+- **`WebRTCSignaling`** — Exchanges SDP offer/answer and ICE candidates via Firebase RTDB at `/games/{gameId}/webrtc/`.
+- **`FirebaseTransport`** — RTDB relay fallback. Supports pause/resume so it can idle while P2P is active.
+- **`ConnectionIndicator`** — UI badge showing "P2P" (green), "Relay" (blue), or "Connecting..."
+
+GamePage uses `HybridTransport` for input/state and `GameSyncService` for config/presence/status.
 
 ### Arenas
 
