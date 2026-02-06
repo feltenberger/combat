@@ -33,6 +33,28 @@
           "$uid": {
             ".write": "$uid === auth.uid"
           }
+        },
+        "webrtc": {
+          "offer": {
+            ".read": true,
+            ".write": "auth != null"
+          },
+          "answer": {
+            ".read": true,
+            ".write": "auth != null"
+          },
+          "hostCandidates": {
+            ".read": true,
+            "$id": {
+              ".write": "auth != null"
+            }
+          },
+          "guestCandidates": {
+            ".read": true,
+            "$id": {
+              ".write": "auth != null"
+            }
+          }
         }
       }
     }
