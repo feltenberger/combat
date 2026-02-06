@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What Is This
 
-Web-based multiplayer remake of Atari Combat. Two tanks battle in arenas with destructible rocks and indestructible walls. Real-time multiplayer via Firebase.
+Web-based multiplayer remake of Atari Combat. 2-4 tanks battle in arenas with destructible rocks and indestructible walls. Supports human vs human, human vs CPU, and mixed human+CPU games. Real-time multiplayer via Firebase.
 
 ## Commands
 
@@ -52,7 +52,7 @@ React 19 + TypeScript with Vite. Canvas 2D API for all rendering (960x640, progr
 - `src/firebase/` — Firebase services: `presence`, `lobby`, `gameSync`, `matchHistory`
 - `src/hooks/` — React hooks: `useGameLoop`, `useFirebasePresence`, `useKeyboardInput`
 - `src/config/constants.ts` — All physics values, tile sizes, colors, timing constants
-- `src/components/lobby/` — Name entry, player list, challenges, color picker, fire rate slider
+- `src/components/lobby/` — Name entry, player list, challenges, color picker, fire rate slider, challenge setup modal, lives selector
 - `src/components/game/` — Game page, canvas, touch controls
 - `src/components/scoreboard/` — Match history display
 - `src/utils/math.ts` — `lerp()` and `lerpAngle()` used for guest interpolation
@@ -71,13 +71,17 @@ React 19 + TypeScript with Vite. Canvas 2D API for all rendering (960x640, progr
 
 Color flows through: localStorage → `PresenceData.color` (RTDB) → `ChallengeData.fromColor` → `GameRoom.config.hostColor`/`guestColor` → `Renderer` → `TankRenderer`/`HUDRenderer`.
 
-When the guest accepts a challenge and both players have the same color, `IncomingChallenge` shows a picker with the clashing color disabled so the guest must pick a different one. `IncomingChallenge` also displays the arena, rounds to win, and fire rate preset.
+When the guest accepts a challenge, `IncomingChallenge` disables colors taken by the challenger and any included CPUs, forcing the guest to pick an available one. `IncomingChallenge` also displays the arena, rounds to win, fire rate preset, and any CPU opponents.
 
-All lobby settings (arena, color, fire rate, rounds to win) persist in localStorage (`combat-arena`, `combat-color`, `combat-fire-rate`, `combat-rounds-to-win`).
+All lobby settings (arena, color, fire rate, rounds to win, lives per round) persist in localStorage (`combat-arena`, `combat-color`, `combat-fire-rate`, `combat-rounds-to-win`, `combat-lives-per-round`).
+
+### Challenge Flow
+
+When a player clicks "Challenge" on a human opponent, `ChallengeSetupModal` appears allowing them to optionally add 1-2 CPU opponents before sending. The `ChallengeData` carries an optional `cpuPlayers: CpuPlayerConfig[]` array. On accept, `acceptChallenge()` passes `cpuPlayers` into the `GameRoom.config`, and `GamePage` creates bots for them. The `buildCpuPlayers()` helper in `src/firebase/cpuGame.ts` handles color conflict resolution and is shared by both the challenge flow and local CPU games.
 
 ### Networking: Host-Authoritative
 
-The **challenger** is the host and runs the game simulation. Host reads local + remote input, runs physics at 60 Hz, broadcasts state to RTDB at 20 Hz. Guest writes input to RTDB, reads state snapshots, interpolates for smooth rendering.
+The **challenger** is the host and runs the game simulation. Host reads local + remote input, runs physics at 60 Hz, broadcasts state to RTDB at 20 Hz. Guest writes input to RTDB, reads state snapshots, interpolates for smooth rendering. In mixed human+CPU games, the host also runs bot AI locally.
 
 - Both players write input to `/games/{gameId}/input/{uid}`
 - `onDisconnect` handlers manage presence and game abandonment
@@ -85,7 +89,7 @@ The **challenger** is the host and runs the game simulation. Host reads local + 
 
 ### Arenas
 
-4 arenas defined programmatically in `Arena.ts` as 30x20 tile grids (no external map files). Tile types: FLOOR (0), WALL (1, indestructible), ROCK (2, destructible 3 HP), SPAWN_1 (3), SPAWN_2 (4). Arena index is selected during the challenge flow and stored in game config.
+4 arenas defined programmatically in `Arena.ts` as 30x20 tile grids (no external map files). Tile types: FLOOR (0), WALL (1, indestructible), ROCK (2, destructible 3 HP), SPAWN_1-4 (3-6). Each arena has 4 spawn points to support up to 4 players. Arena index is selected during the challenge flow and stored in game config.
 
 ### Physics
 
@@ -98,7 +102,7 @@ The **challenger** is the host and runs the game simulation. Host reads local + 
 
 ### CPU Bots
 
-4 difficulty levels, each with distinct behavior. All tuning constants are in `src/bot/cpuConstants.ts`. CPU games run fully locally (no Firebase).
+4 difficulty levels, each with distinct behavior. All tuning constants are in `src/bot/cpuConstants.ts`. CPU-only games run fully locally (no Firebase). Mixed human+CPU games run CPU bots on the host side alongside Firebase networking.
 
 - **Easy** — Intentionally bad: large aim error (±45° offset that drifts), wide fire tolerance (±60°), 40% fire hesitation, occasional wandering and loss of focus. Moves decently but can't shoot straight.
 - **Defensive** — Keeps distance, retreats when too close, seeks cover, dodges bullets.
@@ -111,14 +115,14 @@ The **challenger** is the host and runs the game simulation. Host reads local + 
 WAITING -> COUNTDOWN (3s) -> PLAYING -> ROUND_OVER (2s) -> COUNTDOWN -> ... -> MATCH_OVER
 ```
 
-Rounds to win is configurable via `ROUNDS_TO_WIN_OPTIONS` (1, 2, 3, 5), default 2. Host writes match result to Firestore on completion.
+Rounds to win is configurable via `ROUNDS_TO_WIN_OPTIONS` (1, 2, 3, 5), default 2. Lives per round is configurable via `LIVES_OPTIONS` (1, 2, 3, 5), default 1. With multiple lives, players respawn with brief invincibility (`RESPAWN_INVINCIBILITY_DURATION`). A player is eliminated when all lives are lost. Host writes match result to Firestore on completion.
 
 ### Firebase Data Model
 
 **RTDB** (real-time):
 - `/presence/{uid}` — online status with `onDisconnect`
 - `/challenges/{targetUid}` — pending challenges
-- `/games/{gameId}/config` — game room config (write-once)
+- `/games/{gameId}/config` — game room config (write-once, includes optional `cpuPlayers`)
 - `/games/{gameId}/state` — authoritative state (host writes)
 - `/games/{gameId}/input/{uid}` — player input
 - `/games/{gameId}/presence/{uid}` — in-game presence
