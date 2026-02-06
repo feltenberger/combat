@@ -13,10 +13,12 @@ export function CpuPlayButton({ onStartCpuGame }: CpuPlayButtonProps) {
   const [botCount, setBotCount] = useState(1);
   const [difficulty1, setDifficulty1] = useState<BotDifficulty>('easy');
   const [difficulty2, setDifficulty2] = useState<BotDifficulty>('hard');
+  const [difficulty3, setDifficulty3] = useState<BotDifficulty>('offensive');
 
   const handleStart = () => {
     const diffs: BotDifficulty[] = [difficulty1];
     if (botCount >= 2) diffs.push(difficulty2);
+    if (botCount >= 3) diffs.push(difficulty3);
     onStartCpuGame(diffs);
   };
 
@@ -25,7 +27,7 @@ export function CpuPlayButton({ onStartCpuGame }: CpuPlayButtonProps) {
       <h3>Play vs CPU</h3>
       <div className="cpu-bot-count">
         <span className="bot-count-label">Bots:</span>
-        {[1, 2].map((n) => (
+        {[1, 2, 3].map((n) => (
           <button
             key={n}
             className={`bot-count-btn ${botCount === n ? 'selected' : ''}`}
@@ -60,6 +62,22 @@ export function CpuPlayButton({ onStartCpuGame }: CpuPlayButtonProps) {
                   key={diff}
                   className={`difficulty-btn ${difficulty2 === diff ? 'selected' : ''}`}
                   onClick={() => setDifficulty2(diff)}
+                >
+                  {CPU_DIFFICULTY_NAMES[diff]}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {botCount >= 3 && (
+          <div className="cpu-bot-row">
+            <span className="bot-label">Bot 3:</span>
+            <div className="cpu-difficulty-buttons">
+              {DIFFICULTIES.map((diff) => (
+                <button
+                  key={diff}
+                  className={`difficulty-btn ${difficulty3 === diff ? 'selected' : ''}`}
+                  onClick={() => setDifficulty3(diff)}
                 >
                   {CPU_DIFFICULTY_NAMES[diff]}
                 </button>

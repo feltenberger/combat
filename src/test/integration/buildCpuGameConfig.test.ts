@@ -156,6 +156,27 @@ describe('buildCpuGameConfig', () => {
       expect(config.cpuPlayers![0].name).toContain('#1');
       expect(config.cpuPlayers![1].name).toContain('#2');
     });
+
+    it('supports 3 CPUs filling all 4 color slots', () => {
+      const { config } = buildCpuGameConfig('uid1', 'Alice', 'blue', ['easy', 'hard', 'offensive'], 0);
+      expect(config.cpuPlayers).toBeDefined();
+      expect(config.cpuPlayers!.length).toBe(3);
+      const allColors = [config.hostColor, ...config.cpuPlayers!.map(p => p.color)];
+      expect(new Set(allColors).size).toBe(4); // all 4 colors used
+    });
+
+    it('assigns unique UIDs for 3 CPUs', () => {
+      const { config } = buildCpuGameConfig('uid1', 'Alice', 'blue', ['easy', 'easy', 'easy'], 0);
+      const uids = config.cpuPlayers!.map(p => p.uid);
+      expect(new Set(uids).size).toBe(3);
+    });
+
+    it('numbered names for 3 CPUs', () => {
+      const { config } = buildCpuGameConfig('uid1', 'Alice', 'blue', ['easy', 'hard', 'offensive'], 0);
+      expect(config.cpuPlayers![0].name).toContain('#1');
+      expect(config.cpuPlayers![1].name).toContain('#2');
+      expect(config.cpuPlayers![2].name).toContain('#3');
+    });
   });
 });
 
@@ -206,5 +227,20 @@ describe('buildCpuPlayers', () => {
     const cpuPlayers = buildCpuPlayers(['hard'], usedColors);
     expect(cpuPlayers.length).toBe(1);
     expect(cpuPlayers[0].color).not.toBe('red');
+  });
+
+  it('handles 3 CPUs without color conflicts', () => {
+    const usedColors = new Set<TankColor>(['blue']);
+    const result = buildCpuPlayers(['easy', 'hard', 'offensive'], usedColors);
+    expect(result.length).toBe(3);
+    const allColors = ['blue', ...result.map(p => p.color)];
+    expect(new Set(allColors).size).toBe(4); // all 4 colors used
+  });
+
+  it('assigns unique UIDs for 3 same-difficulty CPUs', () => {
+    const usedColors = new Set<TankColor>(['blue']);
+    const result = buildCpuPlayers(['easy', 'easy', 'easy'], usedColors);
+    const uids = result.map(p => p.uid);
+    expect(new Set(uids).size).toBe(3);
   });
 });

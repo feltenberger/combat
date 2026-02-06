@@ -112,7 +112,8 @@ export const DEFAULT_LIVES_PER_ROUND = 1;
 export const LIVES_OPTIONS = [1, 2, 3, 5];
 export const RESPAWN_INVINCIBILITY_DURATION = 2.0; // seconds
 export const RESPAWN_BLINK_RATE = 8; // Hz
-export const MAX_CPU_OPPONENTS = 2;
+export const MAX_CPU_OPPONENTS = 3;
+export const MAX_CHALLENGE_CPUS = 2;
 
 // Tile Types
 export enum TileType {

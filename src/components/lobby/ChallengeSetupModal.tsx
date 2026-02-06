@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { BotDifficulty, CpuPlayerConfig } from '../../types/game';
-import { TankColor, MAX_CPU_OPPONENTS } from '../../config/constants';
+import { TankColor, MAX_CHALLENGE_CPUS } from '../../config/constants';
 import { CPU_DIFFICULTY_NAMES } from '../../bot/cpuConstants';
 import { buildCpuPlayers } from '../../firebase/cpuGame';
 
@@ -60,7 +60,7 @@ export function ChallengeSetupModal({ targetName, hostColor, onConfirm, onCancel
                   key={n}
                   className={`bot-count-btn ${botCount === n ? 'selected' : ''}`}
                   onClick={() => setBotCount(n)}
-                  disabled={n > MAX_CPU_OPPONENTS}
+                  disabled={n > MAX_CHALLENGE_CPUS}
                 >
                   {n}
                 </button>
