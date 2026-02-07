@@ -80,12 +80,30 @@ All lobby settings (arena, color, fire rate, rounds to win, lives per round) per
 
 When a player clicks "Challenge" on a human opponent, `ChallengeSetupModal` appears allowing them to optionally add 1-2 CPU opponents before sending. The `ChallengeData` carries an optional `cpuPlayers: CpuPlayerConfig[]` array. On accept, `acceptChallenge()` passes `cpuPlayers` into the `GameRoom.config`, and `GamePage` creates bots for them. The `buildCpuPlayers()` helper in `src/firebase/cpuGame.ts` handles color conflict resolution and is shared by both the challenge flow and local CPU games.
 
+### Player IDs and Indices
+
+The codebase uses two identification systems simultaneously:
+
+- **UIDs** (strings) — Used in maps/records throughout (`Map<string, Tank>`, `playerOrder: string[]`, Firebase paths). Human UIDs come from Firebase Auth. CPU UIDs use the format `cpu-bot-{difficulty}` or `cpu-bot-{difficulty}-{index}` (use `isCpuUid()` helper from `cpuGame.ts`, not string checks).
+- **Player indices** (numbers) — Derived from position in `playerOrder` array. Used for spawn position selection (`arena.getSpawnPosition(index)` → spawn1-4) and default color fallback.
+
+### Game Startup: Two Paths in GamePage
+
+`GamePage` has two distinct startup paths:
+
+1. **Local CPU games** — Triggered by `location.state.cpuConfig`. No Firebase or transport layer. Game ID is `cpu_${timestamp}_${random}`. Engine runs fully locally.
+2. **Online games** (human vs human or mixed with CPUs) — Uses `GameSyncService` for config/presence and `HybridTransport` for input/state. Host creates bot instances if `cpuPlayers` in config.
+
+Player limits: `MAX_CPU_OPPONENTS = 3` for solo play (1 human + 3 bots), `MAX_CHALLENGE_CPUS = 2` for challenges (2 humans + 2 bots = 4 total).
+
 ### Networking: Host-Authoritative
 
 The **challenger** is the host and runs the game simulation. Host reads local + remote input, runs physics at 60 Hz, broadcasts state at 20 Hz. Guest receives state snapshots and interpolates for smooth rendering. In mixed human+CPU games, the host also runs bot AI locally.
 
-- Guest interpolation uses a 100ms buffer (`INTERPOLATION_BUFFER_MS` in constants)
+- Guest interpolation uses a 100ms buffer (`INTERPOLATION_BUFFER_MS` in constants). Uses `lerp()` and `lerpAngle()` to smoothly transition between state snapshots.
+- Guest detects new/disappeared bullets from state diffs to trigger client-side sound effects
 - `onDisconnect` handlers manage presence and game abandonment
+- `useGameLoop` caps delta time at 100ms to prevent physics explosion when tab is backgrounded
 
 ### WebRTC P2P Transport
 
@@ -145,7 +163,15 @@ Rounds to win is configurable via `ROUNDS_TO_WIN_OPTIONS` (1, 2, 3, 5), default 
 
 ### Rendering Pipeline
 
-Render order: arena → bullets → tanks → particles → HUD → overlays. This matters when adding visual features that need to layer correctly.
+Render order: arena → bullets → tanks → particles → HUD → overlays. This matters when adding visual features that need to layer correctly. HUD switches layout automatically: side-by-side scores for 2 players, table format for 3-4 players (also used when `livesPerRound > 1`).
+
+### Sound System
+
+`SoundManager` uses Web Audio API for procedural sounds (no audio files). Browser autoplay policies require a user interaction before audio works — both `LobbyPage` and `GamePage` include resume-on-interaction fallbacks. Lobby plays background music; games use SFX only.
+
+### Fullscreen
+
+Fullscreen targets the game-page div, not `document.documentElement`. Fullscreening `<html>` breaks `position:fixed` touch controls on mobile.
 
 ## Testing
 
