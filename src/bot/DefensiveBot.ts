@@ -113,26 +113,24 @@ export class DefensiveBot implements BotBrain {
     const hasLOS = hasLineOfSight(myTank.x, myTank.y, opTank.x, opTank.y, arena);
     const aimed = isAimingAt(myTank.angle, targetAngle, DEFENSIVE_AIM_TOLERANCE);
 
-    // If opponent has LOS on us, actively seek cover to hide
+    // If opponent has LOS on us, take a shot if aimed then seek cover
     if (hasLOS) {
+      const shouldFire = aimed && Math.random() > DEFENSIVE_FIRE_HESITATION;
       this.state = 'COVER';
       this.coverTarget = null;
       this.coverLingerTimer = 0;
       this.stateTimer = 0;
-      return noInput();
+      return angleToInput(myTank.angle, targetAngle, false, false, shouldFire);
     }
 
-    // Fire only with clear LOS, tight aim, AND passing hesitation check
-    const shouldFire = hasLOS && aimed && Math.random() > DEFENSIVE_FIRE_HESITATION;
-
-    // Creep movement — only move a fraction of frames (simulates hesitant, slow movement)
+    // No LOS — creep movement (hesitant, slow)
     const wantsToMove = dist > DEFENSIVE_PREFERRED_DISTANCE + 50;
     const wantsToMoveBack = dist < DEFENSIVE_PREFERRED_DISTANCE - 50;
     const creep = Math.random() < DEFENSIVE_CREEP_CHANCE;
     const moveForward = wantsToMove && creep;
     const moveBack = wantsToMoveBack && creep;
 
-    return angleToInput(myTank.angle, targetAngle, moveForward, moveBack, shouldFire);
+    return angleToInput(myTank.angle, targetAngle, moveForward, moveBack, false);
   }
 
   private seekCover(
@@ -183,22 +181,20 @@ export class DefensiveBot implements BotBrain {
   ): PlayerInput {
     this.peekTimer += dt;
 
-    // Peek time expired — go back to cover
+    // Peek time expired — return to CAMP to re-evaluate
     if (this.peekTimer >= DEFENSIVE_PEEK_DURATION) {
-      this.state = 'COVER';
-      this.coverTarget = null; // Find new cover
-      this.coverLingerTimer = 0;
+      this.state = 'CAMP';
       this.stateTimer = 0;
       return noInput();
     }
 
-    // During peek: rotate to face opponent, maybe fire once (with hesitation)
+    // During peek: move toward opponent to step out of cover, fire if able
     const targetAngle = angleTo(myTank.x, myTank.y, opTank.x, opTank.y);
     const hasLOS = hasLineOfSight(myTank.x, myTank.y, opTank.x, opTank.y, arena);
     const aimed = isAimingAt(myTank.angle, targetAngle, DEFENSIVE_AIM_TOLERANCE);
     const shouldFire = hasLOS && aimed && Math.random() > DEFENSIVE_FIRE_HESITATION;
 
-    return angleToInput(myTank.angle, targetAngle, false, false, shouldFire);
+    return angleToInput(myTank.angle, targetAngle, true, false, shouldFire);
   }
 
   private retreat(

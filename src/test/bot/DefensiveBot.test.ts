@@ -3,6 +3,7 @@ import { DefensiveBot } from '../../bot/DefensiveBot';
 import { BotContext } from '../../bot/BotBrain';
 import { Arena } from '../../engine/Arena';
 import { GameState, BulletState } from '../../types/game';
+import { findCoverPositions } from '../../bot/BotUtilities';
 
 function makeContext(overrides?: Partial<BotContext>): BotContext {
   const state: GameState = {
@@ -78,40 +79,23 @@ describe('DefensiveBot', () => {
   });
 
   describe('fire hesitation', () => {
-    it('suppresses most shots due to 70% hesitation', () => {
-      // We'll test by mocking random: values <= 0.70 suppress fire, > 0.70 allow
-      const randomValues: number[] = [];
-      // Simulate 20 attempts — track how many fire
-      let fireCount = 0;
+    it('fires when random exceeds hesitation threshold and has LOS + aim', () => {
+      // random() = 0.9 > 0.70 hesitation threshold => fires
+      // Also > FREEZE_CHANCE*dt so no freeze triggered
+      vi.spyOn(Math, 'random').mockReturnValue(0.9);
 
-      for (let i = 0; i < 20; i++) {
-        const bot2 = new DefensiveBot();
-        // Use a deterministic sequence: alternate between hesitation-blocked and allowed
-        // Values < 0.30 = creep allowed, > 0.70 = fire allowed
-        // We need: freeze check (high to skip), then behavior random calls
-        const val = i / 20; // 0.0 to 0.95
-        vi.spyOn(Math, 'random').mockReturnValue(val);
+      const ctx = makeContext();
+      // Place opponent at angle 0 from bot, with LOS on arena 0
+      ctx.gameState.tanks['player'].x = 700;
+      ctx.gameState.tanks['player'].y = 200;
+      ctx.gameState.tanks['cpu'].angle = 0; // Aiming at opponent
 
-        // Put bot in PEEK state where it can fire — use many updates to get there
-        // Instead, test fire logic directly by calling update with aimed bot
-        const ctx = makeContext();
-        // Place opponent at angle 0 from bot, with LOS
-        ctx.gameState.tanks['player'].x = 700;
-        ctx.gameState.tanks['player'].y = 200;
-        ctx.gameState.tanks['cpu'].angle = 0; // Aiming at opponent
-
-        const input = bot2.update(ctx);
-        if (input.fire) fireCount++;
-        vi.restoreAllMocks();
-      }
-
-      // With 70% hesitation, most shots should be suppressed
-      // At most 30% should fire (6 out of 20)
-      expect(fireCount).toBeLessThanOrEqual(8);
+      const input = bot.update(ctx);
+      expect(input.fire).toBe(true);
     });
 
-    it('never fires when random is below hesitation threshold', () => {
-      // random() returning 0.5 < 0.70 hesitation threshold => never fires
+    it('suppresses fire when random is below hesitation threshold', () => {
+      // random() = 0.5 < 0.70 hesitation threshold => no fire
       vi.spyOn(Math, 'random').mockReturnValue(0.5);
 
       const ctx = makeContext();
@@ -119,11 +103,25 @@ describe('DefensiveBot', () => {
       ctx.gameState.tanks['player'].y = 200;
       ctx.gameState.tanks['cpu'].angle = 0;
 
-      // Run many frames
-      for (let i = 0; i < 50; i++) {
-        const input = bot.update(ctx);
-        expect(input.fire).toBe(false);
-      }
+      const input = bot.update(ctx);
+      expect(input.fire).toBe(false);
+    });
+
+    it('transitions to COVER after firing from camp', () => {
+      // After firing with LOS, bot should seek cover on next update
+      vi.spyOn(Math, 'random').mockReturnValue(0.9);
+
+      const ctx = makeContext();
+      ctx.gameState.tanks['player'].x = 700;
+      ctx.gameState.tanks['player'].y = 200;
+      ctx.gameState.tanks['cpu'].angle = 0;
+
+      const input1 = bot.update(ctx);
+      expect(input1.fire).toBe(true);
+
+      // Next frame: bot is now in COVER state, should not fire
+      const input2 = bot.update(ctx);
+      expect(input2.fire).toBe(false);
     });
   });
 
@@ -242,56 +240,144 @@ describe('DefensiveBot', () => {
   });
 
   describe('cover and peek cycle', () => {
+    // Helper: drive the bot from CAMP into PEEK state by simulating the full cycle.
+    // Returns the cover position used so callers can build contexts from it.
+    function driveToPeek(bot: DefensiveBot): { x: number; y: number } {
+      const arena = new Arena(0);
+      const playerPos = { x: 500, y: 300 };
+      const cpuStart = { x: 200, y: 200 };
+
+      // Frame 1: CAMP detects LOS → COVER (coverTarget = null)
+      bot.update(makeContext());
+
+      // Frame 2: COVER sets coverTarget via findCoverPositions from cpuStart
+      bot.update(makeContext({ dt: 1 / 60 }));
+
+      // Compute the same cover target the bot selected
+      const covers = findCoverPositions(
+        cpuStart.x, cpuStart.y, playerPos.x, playerPos.y, arena, 8
+      );
+      const coverTarget = covers[0];
+
+      // Place bot at coverTarget so linger timer starts (dist < 20)
+      // Need 180+ frames at 1/60 increment to pass 3s linger time
+      for (let i = 0; i < 185; i++) {
+        const ctx = makeContext({ dt: 1 / 60 });
+        ctx.gameState.tanks['cpu'].x = coverTarget.x;
+        ctx.gameState.tanks['cpu'].y = coverTarget.y;
+        bot.update(ctx);
+      }
+
+      return coverTarget;
+    }
+
     it('transitions from COVER to PEEK after linger time', () => {
       vi.spyOn(Math, 'random').mockReturnValue(0.99);
 
-      // Place bot right at a cover position to simulate reaching cover
-      const ctx = makeContext();
-      // Force bot into COVER by running updates where there's LOS
-      // On arena 0, positions (200,200) and (500,300) likely have LOS
+      const coverTarget = driveToPeek(bot);
 
-      // First update should detect LOS and transition to COVER
-      const input1 = bot.update(ctx);
-
-      // Now simulate being at cover target (the bot finds cover positions)
-      // Run many frames to allow linger timer to accumulate
-      // At ~180 frames per 3s linger time at 60fps
-      let transitionedToPeek = false;
-      for (let i = 0; i < 300; i++) {
-        const input = bot.update(makeContext({ dt: 1 / 60 }));
-        // When peeking, the bot will try to rotate toward the opponent
-        if (input.left || input.right) {
-          transitionedToPeek = true;
-        }
-      }
-
-      // The bot should eventually cycle through cover->peek
-      // (This is a high-level integration test; exact timing depends on arena layout)
-      expect(transitionedToPeek).toBe(true);
+      // Bot should now be in PEEK — peek moves forward (up=true)
+      const ctx = makeContext({ dt: 1 / 60 });
+      ctx.gameState.tanks['cpu'].x = coverTarget.x;
+      ctx.gameState.tanks['cpu'].y = coverTarget.y;
+      const input = bot.update(ctx);
+      expect(input.up).toBe(true);
     });
 
-    it('PEEK transitions back to COVER after peek duration', () => {
+    it('PEEK moves toward opponent to step out of cover', () => {
       vi.spyOn(Math, 'random').mockReturnValue(0.99);
 
-      // Run bot for many frames to cycle through states
-      let stateChanges = 0;
-      let lastWasPeeking = false;
+      const coverTarget = driveToPeek(bot);
 
-      for (let i = 0; i < 600; i++) {
+      // Run several PEEK frames — all should have up=true
+      let peekFramesWithMovement = 0;
+      for (let i = 0; i < 30; i++) {
         const ctx = makeContext({ dt: 1 / 60 });
+        ctx.gameState.tanks['cpu'].x = coverTarget.x;
+        ctx.gameState.tanks['cpu'].y = coverTarget.y;
         const input = bot.update(ctx);
-
-        // Detect transitions by observing behavior changes
-        const isPeeking = !input.up && !input.down && (input.left || input.right);
-        if (lastWasPeeking && !isPeeking) {
-          stateChanges++;
-        }
-        lastWasPeeking = isPeeking;
+        if (input.up) peekFramesWithMovement++;
       }
 
-      // Should have cycled at least once through the peek->cover transition
-      // over 10 seconds of game time
-      expect(stateChanges).toBeGreaterThanOrEqual(0); // At minimum, we verify no crash
+      expect(peekFramesWithMovement).toBeGreaterThan(0);
+    });
+
+    it('PEEK transitions back to CAMP after peek duration', () => {
+      vi.spyOn(Math, 'random').mockReturnValue(0.99);
+
+      const coverTarget = driveToPeek(bot);
+
+      // Run through the 1.5s PEEK duration (90 frames) plus a few extra
+      for (let i = 0; i < 95; i++) {
+        const ctx = makeContext({ dt: 1 / 60 });
+        ctx.gameState.tanks['cpu'].x = coverTarget.x;
+        ctx.gameState.tanks['cpu'].y = coverTarget.y;
+        bot.update(ctx);
+      }
+
+      // Bot should be back in CAMP now. Move it to a position with clear LOS
+      // and aimed at the opponent. If it fires, it proves CAMP was reached
+      // (COVER never fires).
+      const ctx = makeContext({ dt: 1 / 60 });
+      ctx.gameState.tanks['cpu'].x = 200;
+      ctx.gameState.tanks['cpu'].y = 200;
+      ctx.gameState.tanks['cpu'].angle = 0;
+      ctx.gameState.tanks['player'].x = 700;
+      ctx.gameState.tanks['player'].y = 200;
+      const input = bot.update(ctx);
+      // CAMP with LOS + aim + high random → fires (proves we're in CAMP, not COVER)
+      expect(input.fire).toBe(true);
+    });
+  });
+
+  describe('peek firing', () => {
+    it('can fire during peek when it has LOS and is aimed', () => {
+      vi.spyOn(Math, 'random').mockReturnValue(0.99);
+
+      const arena = new Arena(0);
+      const playerPos = { x: 700, y: 200 };
+
+      // Frame 1: CAMP with LOS → fires → COVER
+      const ctx = makeContext();
+      ctx.gameState.tanks['player'].x = playerPos.x;
+      ctx.gameState.tanks['player'].y = playerPos.y;
+      ctx.gameState.tanks['cpu'].angle = 0;
+      bot.update(ctx);
+
+      // Frame 2: COVER sets coverTarget
+      const ctx2 = makeContext({ dt: 1 / 60 });
+      ctx2.gameState.tanks['player'].x = playerPos.x;
+      ctx2.gameState.tanks['player'].y = playerPos.y;
+      bot.update(ctx2);
+
+      // Compute cover target
+      const covers = findCoverPositions(200, 200, playerPos.x, playerPos.y, arena, 8);
+      const coverTarget = covers[0];
+
+      // Place bot at cover target, linger for 185 frames → PEEK
+      for (let i = 0; i < 185; i++) {
+        const c = makeContext({ dt: 1 / 60 });
+        c.gameState.tanks['cpu'].x = coverTarget.x;
+        c.gameState.tanks['cpu'].y = coverTarget.y;
+        c.gameState.tanks['player'].x = playerPos.x;
+        c.gameState.tanks['player'].y = playerPos.y;
+        bot.update(c);
+      }
+
+      // Now in PEEK — place bot at position with clear LOS, aimed at opponent
+      let firedDuringPeek = false;
+      for (let i = 0; i < 90; i++) {
+        const peekCtx = makeContext({ dt: 1 / 60 });
+        peekCtx.gameState.tanks['cpu'].x = 400;
+        peekCtx.gameState.tanks['cpu'].y = 200;
+        peekCtx.gameState.tanks['cpu'].angle = 0; // Aimed at (700, 200)
+        peekCtx.gameState.tanks['player'].x = playerPos.x;
+        peekCtx.gameState.tanks['player'].y = playerPos.y;
+        const input = bot.update(peekCtx);
+        if (input.fire) firedDuringPeek = true;
+      }
+
+      expect(firedDuringPeek).toBe(true);
     });
   });
 

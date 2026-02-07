@@ -110,4 +110,58 @@ describe('CPU Game Integration', () => {
     // Match should have gone through at least 2 rounds
     expect(result.engine.round).toBeGreaterThanOrEqual(2);
   });
+
+  it('DefensiveBot actually fires bullets in the engine', () => {
+    const engine = new GameEngine(0, ROUNDS_TO_WIN);
+    const hostUid = 'player1';
+    const cpuUid = 'cpu-bot-defensive';
+
+    engine.addPlayer(hostUid);
+    engine.addPlayer(cpuUid);
+    engine.startMatch();
+
+    const bot = createBot('defensive');
+    const dt = 1 / 60;
+    let elapsed = 0;
+    let cpuBulletsSeen = 0;
+
+    // Run for 30 seconds of game time — host stands still, bot should fire
+    for (let frame = 0; frame < 30 * 60; frame++) {
+      elapsed += dt;
+
+      // Host does nothing (stationary target)
+      const hostInput: PlayerInput = {
+        left: false, right: false, up: false, down: false,
+        fire: false, timestamp: Date.now(),
+      };
+
+      const botInput = bot.update({
+        myUid: cpuUid,
+        opponentUid: hostUid,
+        allOpponentUids: [hostUid],
+        gameState: engine.getState(),
+        arena: engine.arena,
+        dt,
+        gameTime: elapsed,
+      });
+
+      const inputs = new Map<string, PlayerInput>();
+      inputs.set(hostUid, hostInput);
+      inputs.set(cpuUid, botInput);
+      engine.update(dt, inputs);
+
+      // Count bullets owned by the CPU bot
+      const state = engine.getState();
+      for (const b of state.bullets) {
+        if (b.ownerId === cpuUid) cpuBulletsSeen++;
+      }
+
+      if (engine.phase === 'COUNTDOWN' && engine.countdown >= COUNTDOWN_DURATION - 0.1) {
+        bot.reset();
+      }
+    }
+
+    // The defensive bot MUST have fired at least once in 30 seconds
+    expect(cpuBulletsSeen).toBeGreaterThan(0);
+  });
 });
